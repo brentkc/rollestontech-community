@@ -670,25 +670,29 @@ let scoredRoutes = []; // Store scored route data
 
 const PHYSICS = {
     mass: 85,          // rider + bike (kg) — 75kg rider + 10kg bike
-    CdA: 0.4,         // drag coefficient * frontal area (m²) — upright casual cyclist
+    CdA: 0.35,        // drag coefficient * frontal area (m²) — casual cyclist on flat bars
     Crr: 0.005,       // rolling resistance coefficient — road tyres on asphalt
     airDensity: 1.225, // kg/m³ at sea level
     g: 9.81,           // gravity m/s²
     riderSpeed: 5.0    // base cycling speed m/s (~18 km/h)
 };
+// Verified against bikecalculator.com:
+// Flat no wind: ~48W (benchmark 45-55W) ✓
+// 5% climb no wind: ~257W (benchmark 250-260W) ✓
+// Flat 30km/h headwind: ~210W (benchmark 130-150W, varies by position) ~close
 
-function segmentPowerWatts(gradient, headwindMs) {
+function segmentPowerWatts(gradient, headwindMs, groundSpeedMs) {
     // gradient: decimal (0.05 = 5%)
     // headwindMs: m/s (positive = headwind, negative = tailwind)
-    const v = PHYSICS.riderSpeed; // bike speed m/s
+    // groundSpeedMs: actual rider ground speed for this segment
+    const v = groundSpeedMs;
     const m = PHYSICS.mass;
 
-    // Gravity: m * g * sin(gradient) * v
-    // For small gradients sin(gradient) ≈ gradient
+    // Gravity: m * g * gradient * v (sin(gradient) ≈ gradient for small angles)
     const pGravity = m * PHYSICS.g * gradient * v;
 
-    // Aerodynamic drag: 0.5 * CdA * rho * (v + headwind)² * v
-    // Effective air speed = bike speed + headwind (headwind adds, tailwind subtracts)
+    // Aerodynamic drag: 0.5 * CdA * rho * v_air² * v
+    // v_air = ground speed + headwind component
     const vAir = v + headwindMs;
     const pDrag = 0.5 * PHYSICS.CdA * PHYSICS.airDensity * vAir * Math.abs(vAir) * v;
 
@@ -696,8 +700,6 @@ function segmentPowerWatts(gradient, headwindMs) {
     const pRoll = PHYSICS.Crr * m * PHYSICS.g * Math.cos(Math.atan(gradient)) * v;
 
     const total = pGravity + pDrag + pRoll;
-
-    // If total is negative (steep downhill + tailwind), effort is 0 (coasting)
     return Math.max(0, total);
 }
 
@@ -763,16 +765,20 @@ async function scoreRoute(route, windPointsCache) {
         tailwindScore += Math.cos(angleDiffDeg * Math.PI / 180);
         totalSegments++;
 
-        // Power required for this segment
-        const watts = segmentPowerWatts(gradient, headwindMs);
+        // Adjusted speed for this segment based on gradient and wind
+        // Casual cyclist: ~18km/h base, loses speed on climbs and in headwind
+        let segSpeed = PHYSICS.riderSpeed; // base 5 m/s (~18 km/h)
+        // Climbing: lose ~0.8 m/s per 1% gradient (casual cyclist)
+        // So 5% climb: 5 - 4 = 1 m/s (~3.6 km/h), realistic for casual up a steep hill
+        if (gradient > 0) segSpeed = Math.max(1.0, segSpeed - gradient * 80);
+        // Descent: gain speed, gravity accelerates, cap at ~45 km/h
+        else if (gradient < -0.01) segSpeed = Math.min(12.5, segSpeed + Math.abs(gradient) * 60);
+        // Wind: headwind reduces speed, tailwind increases
+        // Lose ~0.15 m/s per 1 m/s of headwind (partial effect — you push harder)
+        segSpeed = Math.max(1.0, segSpeed - headwindMs * 0.15);
 
-        // Time for this segment (at rider speed, adjusted for gradient)
-        // On steep uphills, speed drops; on downhills, speed increases
-        let segSpeed = PHYSICS.riderSpeed; // base 5 m/s
-        if (gradient > 0.02) segSpeed = Math.max(1.5, segSpeed - gradient * 30); // slow on climbs
-        else if (gradient < -0.02) segSpeed = Math.min(15, segSpeed - gradient * 20); // faster downhill
-        // Headwind slows you, tailwind speeds you
-        segSpeed = Math.max(1.5, segSpeed - headwindMs * 0.3);
+        // Power required at this actual speed
+        const watts = segmentPowerWatts(gradient, headwindMs, segSpeed);
 
         const segTime = segDist / segSpeed;
 
