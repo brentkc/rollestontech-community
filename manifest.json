@@ -1,0 +1,16 @@
+{
+  "name": "Rolleston Speedometer",
+  "short_name": "Speedo",
+  "start_url": "/speedo.html",
+  "display": "fullscreen",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://rollestontech.co.nz/wp-content/uploads/2023/07/cropped-original-logo-symbol.png?w=192",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

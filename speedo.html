@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0a0a0a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <title>Speedometer</title>
+    <link rel="icon" href="https://rollestontech.co.nz/wp-content/uploads/2023/07/cropped-original-logo-symbol.png?w=32" sizes="32x32">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://rollestontech.co.nz/wp-content/uploads/2023/07/cropped-original-logo-symbol.png?w=192">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            height: 100%;
+            background: #0a0a0a;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .container {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        /* Gauge */
+        .gauge-container {
+            position: relative;
+            width: min(90vw, 90vh, 500px);
+            height: min(90vw, 90vh, 500px);
+        }
+        .gauge-container svg {
+            width: 100%;
+            height: 100%;
+        }
+        .gauge-bg { fill: none; stroke: #1a1a2e; stroke-width: 18; }
+        .gauge-track { fill: none; stroke-width: 18; stroke-linecap: round; transition: stroke-dasharray 0.4s ease, stroke 0.4s ease; }
+        .tick-major { stroke: #333; stroke-width: 2; }
+        .tick-minor { stroke: #222; stroke-width: 1; }
+        .tick-label { fill: #555; font-size: 14px; text-anchor: middle; font-weight: 500; }
+        .needle {
+            stroke: #ff3333;
+            stroke-width: 3;
+            stroke-linecap: round;
+            transition: transform 0.4s ease;
+        }
+        .needle-cap-outer { fill: #ff3333; }
+        .needle-cap-inner { fill: #1a1a1a; }
+
+        /* Speed display */
+        .speed-display {
+            position: absolute;
+            top: 55%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        .speed-number {
+            font-size: min(25vw, 25vh, 140px);
+            font-weight: 100;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -3px;
+        }
+        .speed-unit {
+            font-size: min(5vw, 5vh, 28px);
+            color: #666;
+            font-weight: 300;
+            margin-top: 5px;
+        }
+        .speed-label {
+            font-size: min(4vw, 4vh, 22px);
+            font-weight: 500;
+            margin-top: 12px;
+            padding: 6px 20px;
+            border-radius: 20px;
+            display: inline-block;
+            transition: background 0.4s, color 0.4s;
+        }
+
+        /* Max speed */
+        .max-speed {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            text-align: right;
+        }
+        .max-speed .max-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 1px; }
+        .max-speed .max-val { font-size: 28px; font-weight: 200; color: #888; font-variant-numeric: tabular-nums; }
+
+        /* Compass */
+        .compass-display {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+        }
+        .compass-display .comp-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 1px; }
+        .compass-display .comp-val { font-size: 28px; font-weight: 200; color: #888; }
+
+        /* Back link */
+        .back-link {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #333;
+            text-decoration: none;
+            font-size: 13px;
+        }
+        .back-link:hover { color: #666; }
+
+        /* Status */
+        .gps-status {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 13px;
+            color: #444;
+        }
+        .gps-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+        .gps-dot.active { background: #48bb78; }
+        .gps-dot.waiting { background: #ecc94b; animation: pulse 1s infinite; }
+        .gps-dot.off { background: #e53e3e; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        /* Fullscreen button */
+        .fs-btn {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: none;
+            border: 1px solid #333;
+            color: #555;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .fs-btn:hover { border-color: #666; color: #888; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <button class="fs-btn" onclick="goFullscreen()">⛶ Fullscreen</button>
+
+    <div class="compass-display">
+        <div class="comp-label">Heading</div>
+        <div class="comp-val" id="compass-val">--</div>
+    </div>
+
+    <div class="max-speed">
+        <div class="max-label">Max</div>
+        <div class="max-val" id="max-speed">0</div>
+    </div>
+
+    <div class="gauge-container">
+        <svg viewBox="0 0 300 300">
+            <!-- Background arc: 240 degrees, from 150° to 390° (30°) -->
+            <!-- Center at 150,150 radius 130 -->
+
+            <!-- Minor ticks -->
+            <g id="minor-ticks"></g>
+            <!-- Major ticks -->
+            <g id="major-ticks"></g>
+            <!-- Tick labels -->
+            <g id="tick-labels"></g>
+
+            <!-- Background arc -->
+            <path id="gauge-bg" class="gauge-bg" />
+            <!-- Coloured arc -->
+            <path id="gauge-track" class="gauge-track" stroke="#48bb78" stroke-dasharray="0 1000" />
+
+            <!-- Needle -->
+            <line id="needle" class="needle" x1="150" y1="150" x2="150" y2="35" />
+            <circle class="needle-cap-outer" cx="150" cy="150" r="10" />
+            <circle class="needle-cap-inner" cx="150" cy="150" r="5" />
+        </svg>
+
+        <div class="speed-display">
+            <div class="speed-number" id="speed-val">0</div>
+            <div class="speed-unit">km/h</div>
+            <div class="speed-label" id="speed-label" style="background:#1a1a2e;color:#555;">Stationary</div>
+        </div>
+    </div>
+
+    <div class="gps-status">
+        <span class="gps-dot waiting" id="gps-dot"></span>
+        <span id="gps-status-text">Waiting for GPS...</span>
+    </div>
+
+    <a class="back-link" href="index.html">← Back to Weather</a>
+</div>
+
+<script>
+// === GAUGE CONFIG ===
+const CX = 150, CY = 150, R = 130;
+const START_ANGLE = 150; // degrees (bottom-left)
+const END_ANGLE = 390;   // degrees (bottom-right, wrapping past 360)
+const SWEEP = END_ANGLE - START_ANGLE; // 240 degrees
+const MAX_SPEED = 160;
+
+// Convert angle to SVG coordinates
+function angleToXY(angleDeg) {
+    const rad = (angleDeg - 90) * Math.PI / 180;
+    return { x: CX + R * Math.cos(rad), y: CY + R * Math.sin(rad) };
+}
+
+// Build the arc path
+function arcPath(startAngle, endAngle) {
+    const s = angleToXY(startAngle);
+    const e = angleToXY(endAngle);
+    const largeArc = (endAngle - startAngle) > 180 ? 1 : 0;
+    return `M ${s.x} ${s.y} A ${R} ${R} 0 ${largeArc} 1 ${e.x} ${e.y}`;
+}
+
+// Calculate arc length
+const ARC_LEN = (SWEEP / 360) * 2 * Math.PI * R;
+
+// Draw gauge background
+document.getElementById('gauge-bg').setAttribute('d', arcPath(START_ANGLE, END_ANGLE));
+document.getElementById('gauge-track').setAttribute('d', arcPath(START_ANGLE, END_ANGLE));
+
+// Draw ticks
+const majorTicks = document.getElementById('major-ticks');
+const minorTicks = document.getElementById('minor-ticks');
+const tickLabels = document.getElementById('tick-labels');
+
+for (let speed = 0; speed <= MAX_SPEED; speed += 10) {
+    const angle = START_ANGLE + (speed / MAX_SPEED) * SWEEP;
+    const outer = angleToXY(angle);
+    const isMajor = speed % 20 === 0;
+    const innerR = isMajor ? R - 15 : R - 8;
+    const innerRad = (angle - 90) * Math.PI / 180;
+    const inner = { x: CX + innerR * Math.cos(innerRad), y: CY + innerR * Math.sin(innerRad) };
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', outer.x);
+    line.setAttribute('y1', outer.y);
+    line.setAttribute('x2', inner.x);
+    line.setAttribute('y2', inner.y);
+    line.setAttribute('class', isMajor ? 'tick-major' : 'tick-minor');
+    (isMajor ? majorTicks : minorTicks).appendChild(line);
+
+    if (isMajor) {
+        const labelR = R - 28;
+        const lRad = (angle - 90) * Math.PI / 180;
+        const lPos = { x: CX + labelR * Math.cos(lRad), y: CY + labelR * Math.sin(lRad) };
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', lPos.x);
+        text.setAttribute('y', lPos.y + 5);
+        text.setAttribute('class', 'tick-label');
+        text.textContent = speed;
+        tickLabels.appendChild(text);
+    }
+}
+
+// === SPEEDOMETER UPDATE ===
+let maxSpeedKmh = 0;
+
+function updateSpeedo(kmh) {
+    const clamped = Math.min(Math.max(kmh, 0), MAX_SPEED);
+    const pct = clamped / MAX_SPEED;
+
+    // Number
+    document.getElementById('speed-val').textContent = kmh;
+
+    // Needle
+    const needleAngle = START_ANGLE + pct * SWEEP;
+    document.getElementById('needle').setAttribute('transform', `rotate(${needleAngle}, ${CX}, ${CY})`);
+
+    // Arc
+    const dashLen = pct * ARC_LEN;
+    const track = document.getElementById('gauge-track');
+    track.setAttribute('stroke-dasharray', `${dashLen} ${ARC_LEN}`);
+
+    // Colour and label
+    let color, label, labelBg;
+    if (kmh <= 0) { color = '#333'; label = 'Stationary'; labelBg = '#1a1a2e'; }
+    else if (kmh <= 6) { color = '#48bb78'; label = 'Walking'; labelBg = 'rgba(72,187,120,0.15)'; }
+    else if (kmh <= 15) { color = '#48bb78'; label = 'Running / Cycling'; labelBg = 'rgba(72,187,120,0.15)'; }
+    else if (kmh <= 50) { color = '#4299e1'; label = 'Urban'; labelBg = 'rgba(66,153,225,0.15)'; }
+    else if (kmh <= 100) { color = '#ecc94b'; label = 'Open Road'; labelBg = 'rgba(236,201,75,0.15)'; }
+    else { color = '#e53e3e'; label = 'Motorway'; labelBg = 'rgba(229,62,62,0.15)'; }
+
+    track.setAttribute('stroke', color);
+    const labelEl = document.getElementById('speed-label');
+    labelEl.textContent = label;
+    labelEl.style.background = labelBg;
+    labelEl.style.color = color;
+
+    // Max speed
+    if (kmh > maxSpeedKmh) {
+        maxSpeedKmh = kmh;
+        document.getElementById('max-speed').textContent = kmh;
+    }
+}
+
+// === COMPASS ===
+function initCompass() {
+    if (window.DeviceOrientationEvent) {
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            // iOS — request on first touch
+            document.addEventListener('click', function askPerm() {
+                DeviceOrientationEvent.requestPermission().then(state => {
+                    if (state === 'granted') {
+                        window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                        window.addEventListener('deviceorientation', handleOrientation, true);
+                    }
+                }).catch(() => {});
+                document.removeEventListener('click', askPerm);
+            }, { once: true });
+        } else {
+            window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+            window.addEventListener('deviceorientation', handleOrientation, true);
+        }
+    }
+}
+
+function handleOrientation(e) {
+    let heading = null;
+    if (e.webkitCompassHeading !== undefined) heading = e.webkitCompassHeading;
+    else if (e.alpha !== null) heading = e.absolute ? (360 - e.alpha) : e.alpha;
+    if (heading !== null) {
+        const h = Math.round(heading);
+        const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+        document.getElementById('compass-val').textContent = dirs[Math.round(h / 45) % 8] + ' ' + h + '°';
+    }
+}
+
+// === GPS ===
+function initGPS() {
+    if (!navigator.geolocation) {
+        document.getElementById('gps-dot').className = 'gps-dot off';
+        document.getElementById('gps-status-text').textContent = 'GPS not available';
+        return;
+    }
+
+    navigator.geolocation.watchPosition(
+        (pos) => {
+            document.getElementById('gps-dot').className = 'gps-dot active';
+            document.getElementById('gps-status-text').textContent = 'GPS active';
+
+            let speed = pos.coords.speed;
+            const kmh = (speed === null || speed === undefined) ? 0 : Math.round(speed * 3.6);
+            updateSpeedo(kmh);
+
+            // Use GPS heading as compass backup
+            if (pos.coords.heading !== null && pos.coords.heading !== undefined && !isNaN(pos.coords.heading)) {
+                const h = Math.round(pos.coords.heading);
+                const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+                document.getElementById('compass-val').textContent = dirs[Math.round(h / 45) % 8] + ' ' + h + '°';
+            }
+        },
+        (err) => {
+            document.getElementById('gps-dot').className = 'gps-dot off';
+            document.getElementById('gps-status-text').textContent = 'GPS unavailable — enable location';
+        },
+        { enableHighAccuracy: true, maximumAge: 500, timeout: 10000 }
+    );
+}
+
+// === FULLSCREEN ===
+function goFullscreen() {
+    const el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    else if (el.msRequestFullscreen) el.msRequestFullscreen();
+}
+
+// Keep screen awake (prevent sleep while using speedo)
+async function keepAwake() {
+    try {
+        if ('wakeLock' in navigator) {
+            await navigator.wakeLock.request('screen');
+        }
+    } catch(e) {}
+}
+
+// === SERVICE WORKER ===
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// === INIT ===
+initGPS();
+initCompass();
+keepAwake();
+</script>
+
+</body>
+</html>
