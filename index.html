@@ -318,9 +318,38 @@ const weatherCodes = {
 
 const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+// Default: Rolleston
+let userLat = -43.591;
+let userLon = 172.379;
+let userLocation = 'Rolleston, Selwyn';
+
+async function detectLocation() {
+    return new Promise((resolve) => {
+        if (!navigator.geolocation) return resolve(false);
+        navigator.geolocation.getCurrentPosition(
+            async (pos) => {
+                userLat = pos.coords.latitude;
+                userLon = pos.coords.longitude;
+                // Reverse geocode to get place name
+                try {
+                    const geo = await fetch(`https://geocoding-api.open-meteo.com/v1/reverse?latitude=${userLat}&longitude=${userLon}&count=1`);
+                    const geoData = await geo.json();
+                    if (geoData.results && geoData.results.length > 0) {
+                        const r = geoData.results[0];
+                        userLocation = r.name + (r.admin1 ? ', ' + r.admin1 : '');
+                    }
+                } catch(e) {}
+                resolve(true);
+            },
+            () => resolve(false),
+            { timeout: 5000, enableHighAccuracy: false }
+        );
+    });
+}
+
 async function loadWeather() {
     try {
-        const url = 'https://api.open-meteo.com/v1/forecast?latitude=-43.591&longitude=172.379&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=Pacific%2FAuckland&forecast_days=7';
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${userLat}&longitude=${userLon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto&forecast_days=7`;
         const res = await fetch(url);
         const data = await res.json();
 
@@ -371,7 +400,24 @@ async function loadWeather() {
     }
 }
 
-loadWeather();
+// Detect location, update UI, then load weather
+(async () => {
+    const detected = await detectLocation();
+    // Update header location badge
+    document.querySelector('.header .location').innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+        ${userLocation}${detected ? '' : ' (default)'}
+    `;
+    // Update page title
+    const placeName = userLocation.split(',')[0];
+    document.querySelector('.header h1').innerHTML = `<span>${placeName}</span> Weather`;
+    // Update Windy iframe to user's location
+    const windyFrame = document.querySelector('.radar-fullwidth iframe');
+    if (windyFrame) {
+        windyFrame.src = `https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=8&overlay=rain&product=ecmwf&level=surface&lat=${userLat}&lon=${userLon}&message=true&marker=true&calendar=12&pressure=true&detail=true&menu=true`;
+    }
+    await loadWeather();
+})();
 // Refresh every 10 minutes
 setInterval(loadWeather, 600000);
 </script>
