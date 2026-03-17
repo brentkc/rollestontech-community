@@ -299,6 +299,9 @@
 
 <div style="position:relative;flex:1;display:flex;flex-direction:column;">
     <div id="map"></div>
+    <div id="windy-overlay" style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:450;pointer-events:none;display:none;opacity:0.55;">
+        <iframe id="windy-iframe" style="width:100%;height:100%;border:none;pointer-events:none;" src="" loading="lazy"></iframe>
+    </div>
     <div class="status-msg" id="status-msg"></div>
     <div class="compass" id="compass">
         <div class="compass-arrow" id="compass-arrow">➤</div>
@@ -353,15 +356,45 @@ const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
     maxZoom: 19
 }).addTo(map);
 
-// Windy OpenWeatherMap wind tile overlay
-const windLayer = L.tileLayer('https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=9de243494c0b295cca9337e1e96b00e2', {
-    attribution: '&copy; OpenWeatherMap',
-    maxZoom: 19,
-    opacity: 0.5
-}).addTo(map);
+// Wind overlay toggle
+let windOverlayVisible = false;
+const windToggle = L.control({ position: 'topleft' });
+windToggle.onAdd = function() {
+    const btn = L.DomUtil.create('div');
+    btn.innerHTML = '<button id="wind-toggle-btn" style="background:#2d3748;color:#90cdf4;border:2px solid #4a5568;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:0.8em;font-weight:600;white-space:nowrap;" onclick="toggleWindMap()">💨 Wind Map</button>';
+    L.DomEvent.disableClickPropagation(btn);
+    return btn;
+};
+windToggle.addTo(map);
 
-// Layer toggle control
-L.control.layers(null, { 'Wind Overlay': windLayer }, { position: 'topleft', collapsed: true }).addTo(map);
+function toggleWindMap() {
+    const overlay = document.getElementById('windy-overlay');
+    const btn = document.getElementById('wind-toggle-btn');
+    windOverlayVisible = !windOverlayVisible;
+    if (windOverlayVisible) {
+        updateWindyOverlay();
+        overlay.style.display = 'block';
+        btn.style.background = '#4299e1';
+        btn.style.color = '#fff';
+        btn.style.borderColor = '#4299e1';
+    } else {
+        overlay.style.display = 'none';
+        btn.style.background = '#2d3748';
+        btn.style.color = '#90cdf4';
+        btn.style.borderColor = '#4a5568';
+    }
+}
+
+function updateWindyOverlay() {
+    const center = map.getCenter();
+    const zoom = map.getZoom();
+    const iframe = document.getElementById('windy-iframe');
+    iframe.src = `https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=${zoom}&overlay=wind&product=ecmwf&level=surface&lat=${center.lat}&lon=${center.lng}&message=&marker=&calendar=now&pressure=&detail=&menu=`;
+}
+
+map.on('moveend', function() {
+    if (windOverlayVisible) updateWindyOverlay();
+});
 
 const legend = L.control({ position: 'bottomright' });
 legend.onAdd = function() {
