@@ -348,10 +348,20 @@
 <script>
 // === MAP ===
 const map = L.map('map', { zoomControl: true }).setView([-43.591, 172.379], 13);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
     maxZoom: 19
 }).addTo(map);
+
+// Windy OpenWeatherMap wind tile overlay
+const windLayer = L.tileLayer('https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=9de243494c0b295cca9337e1e96b00e2', {
+    attribution: '&copy; OpenWeatherMap',
+    maxZoom: 19,
+    opacity: 0.5
+}).addTo(map);
+
+// Layer toggle control
+L.control.layers(null, { 'Wind Overlay': windLayer }, { position: 'topleft', collapsed: true }).addTo(map);
 
 const legend = L.control({ position: 'bottomright' });
 legend.onAdd = function() {
