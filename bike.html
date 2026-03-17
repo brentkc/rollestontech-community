@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0c1929">
+    <title>Wind-Assisted Cycling Planner | Rolleston Community</title>
+    <meta name="description" content="Plan your cycling route with the wind at your back. Live wind data helps you find the best tailwind route in Canterbury, New Zealand.">
+    <link rel="icon" href="https://rollestontech.co.nz/wp-content/uploads/2023/07/cropped-original-logo-symbol.png?w=32" sizes="32x32">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0c1929;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top bar */
+        .top-bar {
+            background: linear-gradient(135deg, #1a365d, #2c5282);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+            flex-wrap: wrap;
+            border-bottom: 2px solid #4299e1;
+            z-index: 1000;
+        }
+        .top-bar h1 {
+            font-size: 1.2em;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .top-bar h1 span { color: #90cdf4; font-weight: 300; }
+        .top-bar-links {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .top-bar-links a {
+            color: #90cdf4;
+            text-decoration: none;
+            font-size: 0.85em;
+        }
+        .top-bar-links a:hover { color: #fff; }
+
+        /* Controls panel */
+        .controls {
+            background: rgba(26, 32, 44, 0.95);
+            padding: 15px 20px;
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            border-bottom: 1px solid #2d3748;
+            z-index: 999;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+            min-width: 180px;
+        }
+        .control-group label {
+            font-size: 0.75em;
+            color: #90cdf4;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .control-group input, .control-group select {
+            background: #2d3748;
+            border: 1px solid #4a5568;
+            color: #fff;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            outline: none;
+        }
+        .control-group input:focus, .control-group select:focus {
+            border-color: #4299e1;
+        }
+        .btn-plan {
+            background: #48bb78;
+            color: #fff;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.2s;
+        }
+        .btn-plan:hover { background: #38a169; }
+        .btn-plan:disabled {
+            background: #4a5568;
+            cursor: not-allowed;
+        }
+        .btn-locate {
+            background: #4299e1;
+            color: #fff;
+            border: none;
+            padding: 10px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background 0.2s;
+        }
+        .btn-locate:hover { background: #3182ce; }
+
+        /* Map */
+        #map {
+            flex: 1;
+            min-height: 400px;
+        }
+
+        /* Info panel overlay */
+        .info-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            max-width: 500px;
+            background: rgba(26, 32, 44, 0.95);
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid #2d3748;
+            z-index: 800;
+            display: none;
+        }
+        .info-panel h3 {
+            color: #90cdf4;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+        .info-item { text-align: center; }
+        .info-item .info-val {
+            font-size: 1.5em;
+            font-weight: 600;
+        }
+        .info-item .info-lbl {
+            font-size: 0.7em;
+            color: #90cdf4;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 2px;
+        }
+        .wind-score {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #2d3748;
+            text-align: center;
+        }
+        .wind-score .score-bar {
+            width: 100%;
+            height: 8px;
+            background: #2d3748;
+            border-radius: 4px;
+            margin: 8px 0;
+            overflow: hidden;
+        }
+        .wind-score .score-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s;
+        }
+        .wind-score .score-text {
+            font-size: 0.85em;
+            color: #a0aec0;
+        }
+        .close-panel {
+            position: absolute;
+            top: 12px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: #718096;
+            font-size: 1.2em;
+            cursor: pointer;
+        }
+        .close-panel:hover { color: #fff; }
+
+        /* Wind legend on map */
+        .wind-legend {
+            background: rgba(26, 32, 44, 0.9);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.8em;
+            color: #e2e8f0;
+            line-height: 1.6;
+        }
+        .wind-legend strong { color: #90cdf4; }
+
+        /* Status message */
+        .status-msg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(26, 32, 44, 0.9);
+            padding: 15px 25px;
+            border-radius: 12px;
+            z-index: 800;
+            display: none;
+            text-align: center;
+            color: #90cdf4;
+        }
+
+        /* Ad banner */
+        .map-ad {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(26, 54, 93, 0.9);
+            border: 1px solid #4299e1;
+            border-radius: 10px;
+            padding: 10px 15px;
+            z-index: 800;
+            max-width: 220px;
+        }
+        .map-ad a {
+            color: #63b3ed;
+            text-decoration: none;
+            font-size: 0.8em;
+            font-weight: 500;
+        }
+        .map-ad a:hover { color: #fff; }
+        .map-ad p {
+            font-size: 0.7em;
+            color: #90cdf4;
+            margin-top: 3px;
+        }
+
+        @media (max-width: 600px) {
+            .controls { padding: 10px; gap: 8px; }
+            .control-group { min-width: 140px; }
+            .info-grid { grid-template-columns: repeat(2, 1fr); }
+            .map-ad { display: none; }
+            .top-bar h1 { font-size: 1em; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="top-bar">
+    <h1>🚴 Wind Rider <span>Cycling Route Planner</span></h1>
+    <div class="top-bar-links">
+        <a href="index.html">Weather</a>
+        <a href="https://rollestontech.co.nz" target="_blank" rel="noopener">Rolleston Tech Solutions</a>
+    </div>
+</div>
+
+<div class="controls">
+    <div class="control-group" style="flex: 0; min-width: auto;">
+        <label>&nbsp;</label>
+        <button class="btn-locate" onclick="locateMe()" title="Use my location">📍 My Location</button>
+    </div>
+    <div class="control-group">
+        <label>From</label>
+        <input type="text" id="input-from" placeholder="Click map or type address" />
+    </div>
+    <div class="control-group">
+        <label>To</label>
+        <input type="text" id="input-to" placeholder="Click map or type address" />
+    </div>
+    <div class="control-group" style="flex: 0; min-width: auto;">
+        <label>&nbsp;</label>
+        <button class="btn-plan" id="btn-go" onclick="planRoute()" disabled>Plan Route</button>
+    </div>
+</div>
+
+<div style="position: relative; flex: 1; display: flex; flex-direction: column;">
+    <div id="map"></div>
+
+    <div class="status-msg" id="status-msg"></div>
+
+    <div class="info-panel" id="info-panel">
+        <button class="close-panel" onclick="document.getElementById('info-panel').style.display='none'">✕</button>
+        <h3>Route Summary</h3>
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-val" id="route-dist">--</div>
+                <div class="info-lbl">Distance</div>
+            </div>
+            <div class="info-item">
+                <div class="info-val" id="route-time">--</div>
+                <div class="info-lbl">Est. Time</div>
+            </div>
+            <div class="info-item">
+                <div class="info-val" id="route-wind-speed">--</div>
+                <div class="info-lbl">Wind</div>
+            </div>
+            <div class="info-item">
+                <div class="info-val" id="route-wind-dir">--</div>
+                <div class="info-lbl">Direction</div>
+            </div>
+        </div>
+        <div class="wind-score">
+            <div class="score-bar"><div class="score-fill" id="score-fill"></div></div>
+            <div class="score-text" id="score-text">Calculating wind advantage...</div>
+        </div>
+    </div>
+
+    <div class="map-ad">
+        <a href="https://rollestontech.co.nz">🔧 Rolleston Tech Solutions</a>
+        <p>Computer repairs &amp; IT support in Rolleston</p>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// === MAP SETUP ===
+const map = L.map('map', { zoomControl: true }).setView([-43.591, 172.379], 13);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19
+}).addTo(map);
+
+// Wind legend
+const legend = L.control({ position: 'bottomright' });
+legend.onAdd = function() {
+    const div = L.DomUtil.create('div', 'wind-legend');
+    div.innerHTML = '<strong>How to use:</strong><br>1. Click 📍 or click map to set <b>start</b><br>2. Click map again to set <b>destination</b><br>3. Hit <b>Plan Route</b>';
+    return div;
+};
+legend.addTo(map);
+
+// === STATE ===
+let startMarker = null;
+let endMarker = null;
+let routeLayer = null;
+let windArrows = [];
+let clickMode = 'start'; // 'start' or 'end'
+
+const startIcon = L.divIcon({
+    html: '<div style="background:#48bb78;width:14px;height:14px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 6px rgba(0,0,0,0.4);"></div>',
+    iconSize: [14, 14], iconAnchor: [7, 7], className: ''
+});
+const endIcon = L.divIcon({
+    html: '<div style="background:#e53e3e;width:14px;height:14px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 6px rgba(0,0,0,0.4);"></div>',
+    iconSize: [14, 14], iconAnchor: [7, 7], className: ''
+});
+
+// === MAP CLICK ===
+map.on('click', async function(e) {
+    const latlng = e.latlng;
+    const name = await reverseGeocode(latlng.lat, latlng.lng);
+
+    if (clickMode === 'start') {
+        if (startMarker) map.removeLayer(startMarker);
+        startMarker = L.marker(latlng, { icon: startIcon }).addTo(map).bindPopup('Start: ' + name).openPopup();
+        document.getElementById('input-from').value = name;
+        clickMode = 'end';
+    } else {
+        if (endMarker) map.removeLayer(endMarker);
+        endMarker = L.marker(latlng, { icon: endIcon }).addTo(map).bindPopup('Destination: ' + name).openPopup();
+        document.getElementById('input-to').value = name;
+        clickMode = 'start';
+    }
+    updatePlanButton();
+});
+
+function updatePlanButton() {
+    document.getElementById('btn-go').disabled = !(startMarker && endMarker);
+}
+
+// === LOCATE ME ===
+function locateMe() {
+    if (!navigator.geolocation) return;
+    showStatus('Finding your location...');
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        const latlng = L.latLng(lat, lon);
+        const name = await reverseGeocode(lat, lon);
+
+        if (startMarker) map.removeLayer(startMarker);
+        startMarker = L.marker(latlng, { icon: startIcon }).addTo(map).bindPopup('Start: ' + name).openPopup();
+        document.getElementById('input-from').value = name;
+        clickMode = 'end';
+        map.setView(latlng, 14);
+        hideStatus();
+        updatePlanButton();
+    }, () => {
+        hideStatus();
+    }, { enableHighAccuracy: true, timeout: 8000 });
+}
+
+// === REVERSE GEOCODE ===
+async function reverseGeocode(lat, lon) {
+    try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=16&accept-language=en`);
+        const data = await res.json();
+        if (data && data.address) {
+            const a = data.address;
+            const road = a.road || '';
+            const suburb = a.suburb || a.town || a.village || a.hamlet || '';
+            return road ? road + (suburb ? ', ' + suburb : '') : suburb || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+        }
+    } catch(e) {}
+    return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+}
+
+// === FORWARD GEOCODE ===
+async function forwardGeocode(query) {
+    try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&countrycodes=nz&accept-language=en`);
+        const data = await res.json();
+        if (data && data.length > 0) {
+            return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), name: data[0].display_name.split(',').slice(0, 2).join(',') };
+        }
+    } catch(e) {}
+    return null;
+}
+
+// === GET WIND DATA ===
+async function getWind(lat, lon) {
+    try {
+        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&timezone=auto`);
+        const data = await res.json();
+        return {
+            speed: data.current.wind_speed_10m,
+            direction: data.current.wind_direction_10m,
+            gusts: data.current.wind_gusts_10m
+        };
+    } catch(e) {
+        return { speed: 0, direction: 0, gusts: 0 };
+    }
+}
+
+// === ROUTE PLANNING ===
+async function planRoute() {
+    // If user typed addresses, geocode them
+    if (!startMarker) {
+        const fromText = document.getElementById('input-from').value;
+        if (fromText) {
+            const loc = await forwardGeocode(fromText);
+            if (loc) {
+                const latlng = L.latLng(loc.lat, loc.lon);
+                startMarker = L.marker(latlng, { icon: startIcon }).addTo(map);
+                document.getElementById('input-from').value = loc.name;
+            }
+        }
+    }
+    if (!endMarker) {
+        const toText = document.getElementById('input-to').value;
+        if (toText) {
+            const loc = await forwardGeocode(toText);
+            if (loc) {
+                const latlng = L.latLng(loc.lat, loc.lon);
+                endMarker = L.marker(latlng, { icon: endIcon }).addTo(map);
+                document.getElementById('input-to').value = loc.name;
+            }
+        }
+    }
+
+    if (!startMarker || !endMarker) return;
+
+    showStatus('Planning route & checking wind...');
+    document.getElementById('btn-go').disabled = true;
+
+    // Clear old route
+    if (routeLayer) map.removeLayer(routeLayer);
+    windArrows.forEach(a => map.removeLayer(a));
+    windArrows = [];
+
+    const start = startMarker.getLatLng();
+    const end = endMarker.getLatLng();
+
+    try {
+        // Get cycling route from OSRM (free, no API key)
+        const routeUrl = `https://router.project-osrm.org/route/v1/cycling/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true`;
+        const routeRes = await fetch(routeUrl);
+        const routeData = await routeRes.json();
+
+        if (!routeData.routes || routeData.routes.length === 0) {
+            showStatus('No cycling route found. Try different locations.');
+            document.getElementById('btn-go').disabled = false;
+            setTimeout(hideStatus, 3000);
+            return;
+        }
+
+        const route = routeData.routes[0];
+        const coords = route.geometry.coordinates; // [lng, lat] pairs
+        const distKm = (route.distance / 1000).toFixed(1);
+        const durMin = Math.round(route.duration / 60);
+
+        // Get wind at midpoint of route
+        const midIdx = Math.floor(coords.length / 2);
+        const midLat = coords[midIdx][1];
+        const midLon = coords[midIdx][0];
+        const wind = await getWind(midLat, midLon);
+
+        // Calculate wind score for each segment
+        const leafletCoords = coords.map(c => [c[1], c[0]]);
+        let tailwindScore = 0;
+        let totalSegments = 0;
+
+        // Color segments based on wind alignment
+        const segmentColors = [];
+        for (let i = 0; i < coords.length - 1; i++) {
+            const bearing = calcBearing(coords[i][1], coords[i][0], coords[i+1][1], coords[i+1][0]);
+            const windFrom = wind.direction; // wind comes FROM this direction
+            const windTo = (windFrom + 180) % 360; // wind blows TO this direction
+            const diff = angleDiff(bearing, windTo);
+
+            // diff < 90 = tailwind, > 90 = headwind
+            const score = Math.cos(diff * Math.PI / 180);
+            tailwindScore += score;
+            totalSegments++;
+
+            if (diff <= 45) segmentColors.push('#48bb78'); // strong tailwind - green
+            else if (diff <= 90) segmentColors.push('#4299e1'); // slight tailwind - blue
+            else if (diff <= 135) segmentColors.push('#ecc94b'); // slight headwind - yellow
+            else segmentColors.push('#e53e3e'); // strong headwind - red
+        }
+
+        // Draw coloured route segments
+        routeLayer = L.layerGroup();
+        for (let i = 0; i < leafletCoords.length - 1; i++) {
+            const seg = L.polyline([leafletCoords[i], leafletCoords[i+1]], {
+                color: segmentColors[i] || '#4299e1',
+                weight: 5,
+                opacity: 0.85
+            });
+            routeLayer.addLayer(seg);
+        }
+        routeLayer.addTo(map);
+
+        // Add wind arrows along route
+        const arrowInterval = Math.max(1, Math.floor(coords.length / 8));
+        for (let i = 0; i < coords.length; i += arrowInterval) {
+            const lat = coords[i][1];
+            const lon = coords[i][0];
+            const rotation = wind.direction; // arrow points in direction wind comes from
+            const arrow = L.marker([lat, lon], {
+                icon: L.divIcon({
+                    html: `<div style="transform:rotate(${rotation}deg);font-size:18px;opacity:0.7;filter:drop-shadow(0 0 2px rgba(0,0,0,0.5));">⬇️</div>`,
+                    iconSize: [20, 20], iconAnchor: [10, 10], className: ''
+                })
+            });
+            windArrows.push(arrow);
+            arrow.addTo(map);
+        }
+
+        // Fit map to route
+        map.fitBounds(L.latLngBounds(leafletCoords).pad(0.1));
+
+        // Calculate overall wind score (0-100)
+        const avgScore = totalSegments > 0 ? tailwindScore / totalSegments : 0;
+        const windPct = Math.round((avgScore + 1) / 2 * 100); // normalize -1..1 to 0..100
+
+        // Wind direction label
+        const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+        const windDirLabel = dirs[Math.round(wind.direction / 45) % 8];
+
+        // Update info panel
+        document.getElementById('route-dist').textContent = distKm + ' km';
+        document.getElementById('route-time').textContent = durMin + ' min';
+        document.getElementById('route-wind-speed').textContent = Math.round(wind.speed) + ' km/h';
+        document.getElementById('route-wind-dir').textContent = windDirLabel;
+
+        const scoreFill = document.getElementById('score-fill');
+        scoreFill.style.width = windPct + '%';
+        if (windPct >= 60) {
+            scoreFill.style.background = '#48bb78';
+            document.getElementById('score-text').textContent = `${windPct}% tailwind advantage — great ride! 🎉`;
+        } else if (windPct >= 45) {
+            scoreFill.style.background = '#4299e1';
+            document.getElementById('score-text').textContent = `${windPct}% — mixed conditions, some sections with you, some against`;
+        } else if (windPct >= 30) {
+            scoreFill.style.background = '#ecc94b';
+            document.getElementById('score-text').textContent = `${windPct}% — mostly headwind. Consider reversing your route!`;
+        } else {
+            scoreFill.style.background = '#e53e3e';
+            document.getElementById('score-text').textContent = `${windPct}% — strong headwind. Ride the other way if possible! 💨`;
+        }
+
+        document.getElementById('info-panel').style.display = 'block';
+        hideStatus();
+
+        // Update legend
+        const legendDiv = document.querySelector('.wind-legend');
+        legendDiv.innerHTML = `<strong>Route colours:</strong><br>
+            <span style="color:#48bb78">■</span> Strong tailwind<br>
+            <span style="color:#4299e1">■</span> Slight tailwind<br>
+            <span style="color:#ecc94b">■</span> Slight headwind<br>
+            <span style="color:#e53e3e">■</span> Strong headwind<br>
+            <br>Wind: ${Math.round(wind.speed)} km/h ${windDirLabel}` +
+            (wind.gusts > wind.speed + 5 ? `<br>Gusts: ${Math.round(wind.gusts)} km/h` : '');
+
+    } catch(e) {
+        showStatus('Error planning route. Please try again.');
+        setTimeout(hideStatus, 3000);
+    }
+
+    document.getElementById('btn-go').disabled = false;
+}
+
+// === HELPERS ===
+function calcBearing(lat1, lon1, lat2, lon2) {
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
+    const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
+              Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
+    return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
+}
+
+function angleDiff(a, b) {
+    let d = Math.abs(a - b) % 360;
+    return d > 180 ? 360 - d : d;
+}
+
+function showStatus(msg) {
+    const el = document.getElementById('status-msg');
+    el.textContent = msg;
+    el.style.display = 'block';
+}
+
+function hideStatus() {
+    document.getElementById('status-msg').style.display = 'none';
+}
+
+// Handle Enter key in inputs
+document.getElementById('input-from').addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+        const loc = await forwardGeocode(e.target.value);
+        if (loc) {
+            if (startMarker) map.removeLayer(startMarker);
+            startMarker = L.marker([loc.lat, loc.lon], { icon: startIcon }).addTo(map);
+            e.target.value = loc.name;
+            map.setView([loc.lat, loc.lon], 14);
+            clickMode = 'end';
+            updatePlanButton();
+        }
+    }
+});
+
+document.getElementById('input-to').addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+        const loc = await forwardGeocode(e.target.value);
+        if (loc) {
+            if (endMarker) map.removeLayer(endMarker);
+            endMarker = L.marker([loc.lat, loc.lon], { icon: endIcon }).addTo(map);
+            e.target.value = loc.name;
+            clickMode = 'start';
+            updatePlanButton();
+            if (startMarker) planRoute();
+        }
+    }
+});
+
+// Auto-locate on load
+locateMe();
+</script>
+
+</body>
+</html>
