@@ -623,23 +623,39 @@ function getWindAtIndex(windPoints, coordIdx) {
     return { speed: last.speed, direction: last.direction, gusts: last.gusts };
 }
 
-// === ELEVATION ===
+// === ELEVATION (LINZ 8m DEM via Open Topo Data) ===
 async function getElevations(coords) {
-    // Sample up to 50 points along the route
-    const step = Math.max(1, Math.floor(coords.length / 50));
+    // Sample up to 100 points (API max) along the route
+    const maxPoints = 100;
+    const step = Math.max(1, Math.floor(coords.length / maxPoints));
     const sampled = [];
     for (let i = 0; i < coords.length; i += step) sampled.push(coords[i]);
     if (sampled[sampled.length - 1] !== coords[coords.length - 1]) sampled.push(coords[coords.length - 1]);
+    // Cap at 100
+    while (sampled.length > 100) sampled.pop();
 
-    const lats = sampled.map(c => c[1]).join(',');
-    const lons = sampled.map(c => c[0]).join(',');
+    // Build pipe-separated locations string: lat,lng|lat,lng|...
+    const locations = sampled.map(c => `${c[1]},${c[0]}`).join('|');
 
     try {
-        const res = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`);
+        const res = await fetch(`https://api.opentopodata.org/v1/nzdem8m?locations=${locations}`);
         const data = await res.json();
-        return { elevations: data.elevation, sampled };
+        if (data.status === 'OK' && data.results) {
+            const elevations = data.results.map(r => r.elevation !== null ? r.elevation : 0);
+            return { elevations, sampled };
+        }
+        throw new Error('Bad response');
     } catch(e) {
-        return { elevations: sampled.map(() => 0), sampled };
+        // Fallback to Open-Meteo 90m if LINZ fails
+        try {
+            const lats = sampled.map(c => c[1]).join(',');
+            const lons = sampled.map(c => c[0]).join(',');
+            const res2 = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`);
+            const data2 = await res2.json();
+            return { elevations: data2.elevation, sampled };
+        } catch(e2) {
+            return { elevations: sampled.map(() => 0), sampled };
+        }
     }
 }
 
