@@ -3,10 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0c1929">
     <title>Rolleston Weather | Live Forecast & Radar</title>
-    <meta name="description" content="Live weather forecast and wind radar for Rolleston, Canterbury, New Zealand. A free community resource by Rolleston Tech Solutions.">
+    <meta name="description" content="Live weather forecast, wind radar and speedometer for Rolleston, Canterbury, New Zealand. A free community resource by Rolleston Tech Solutions.">
     <meta property="og:title" content="Rolleston Weather — Live Forecast & Radar">
     <meta property="og:description" content="Live weather for Rolleston and Selwyn, Canterbury. Updated in real time.">
+    <meta property="og:image" content="https://rollestontech.co.nz/wp-content/uploads/2023/07/cropped-original-logo-1.png">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://community.rollestontech.co.nz">
     <link rel="icon" href="https://rollestontech.co.nz/wp-content/uploads/2023/07/cropped-original-logo-symbol.png?w=32" sizes="32x32">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -17,7 +21,6 @@
             min-height: 100vh;
         }
 
-        /* Header */
         .header {
             text-align: center;
             padding: 40px 20px 20px;
@@ -44,18 +47,20 @@
             font-size: 0.95em;
             color: #bee3f8;
         }
+        .header .updated {
+            color: #4a5568;
+            font-size: 0.8em;
+            margin-top: 10px;
+        }
 
-        /* Main content */
         .container {
             max-width: 1100px;
             margin: 0 auto;
             padding: 20px;
         }
 
-        /* Current weather card */
         .current-weather {
             background: rgba(255,255,255,0.08);
-            backdrop-filter: blur(10px);
             border-radius: 20px;
             padding: 30px;
             text-align: center;
@@ -84,21 +89,19 @@
         .details {
             display: flex;
             justify-content: center;
-            gap: 30px;
+            gap: 25px;
             margin-top: 20px;
             flex-wrap: wrap;
         }
-        .detail-item {
-            text-align: center;
-        }
+        .detail-item { text-align: center; }
         .detail-item .label {
-            font-size: 0.8em;
+            font-size: 0.75em;
             color: #90cdf4;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
         .detail-item .value {
-            font-size: 1.4em;
+            font-size: 1.3em;
             font-weight: 600;
             margin-top: 4px;
         }
@@ -106,7 +109,6 @@
         /* Forecast */
         .forecast {
             background: rgba(255,255,255,0.08);
-            backdrop-filter: blur(10px);
             border-radius: 20px;
             padding: 30px;
             margin-bottom: 25px;
@@ -122,7 +124,7 @@
         }
         .forecast-days {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            grid-template-columns: repeat(3, 1fr);
             gap: 12px;
         }
         .day-card {
@@ -132,56 +134,82 @@
             text-align: center;
             border: 1px solid rgba(255,255,255,0.06);
         }
-        .day-card .day-name {
-            font-size: 0.85em;
-            color: #90cdf4;
-            font-weight: 600;
-        }
-        .day-card .day-icon {
-            font-size: 2em;
-            margin: 8px 0;
-        }
-        .day-card .day-temps {
-            font-size: 1.1em;
-            font-weight: 600;
-        }
-        .day-card .day-temps .low {
-            color: #90cdf4;
-            font-weight: 400;
-        }
-        .day-card .day-rain {
-            font-size: 0.8em;
-            color: #63b3ed;
-            margin-top: 4px;
-        }
+        .day-card .day-name { font-size: 0.85em; color: #90cdf4; font-weight: 600; }
+        .day-card .day-icon { font-size: 2em; margin: 8px 0; }
+        .day-card .day-temps { font-size: 1.1em; font-weight: 600; }
+        .day-card .day-temps .low { color: #90cdf4; font-weight: 400; }
+        .day-card .day-rain { font-size: 0.8em; color: #63b3ed; margin-top: 4px; }
 
-        /* Full-width Windy radar */
-        .radar-fullwidth {
-            width: 100%;
-            margin-bottom: 0;
+        /* Speedometer */
+        .speedo-section {
+            background: rgba(255,255,255,0.08);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 25px;
+            border: 1px solid rgba(255,255,255,0.1);
+            text-align: center;
         }
-        .radar-fullwidth iframe {
+        .speedo-section h2 {
+            font-size: 1.1em;
+            font-weight: 400;
+            color: #90cdf4;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .speedo-display {
+            position: relative;
+            width: 250px;
+            height: 140px;
+            margin: 0 auto;
+        }
+        .speedo-value {
+            font-size: 4.5em;
+            font-weight: 200;
+            line-height: 1;
+        }
+        .speedo-unit {
+            font-size: 1em;
+            color: #90cdf4;
+            margin-top: 5px;
+        }
+        .speedo-label {
+            font-size: 0.85em;
+            color: #718096;
+            margin-top: 10px;
+        }
+        .speedo-bar {
             width: 100%;
-            height: 70vh;
-            border: none;
-            display: block;
+            max-width: 300px;
+            height: 6px;
+            background: #2d3748;
+            border-radius: 3px;
+            margin: 15px auto 0;
+            overflow: hidden;
+        }
+        .speedo-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease, background 0.5s ease;
+            width: 0%;
+            background: #48bb78;
         }
 
         /* Quick links */
         .quick-links {
             display: flex;
             justify-content: center;
-            gap: 15px;
+            gap: 12px;
             flex-wrap: wrap;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
         }
         .quick-link {
             background: rgba(255,255,255,0.08);
             color: #bee3f8;
             text-decoration: none;
-            padding: 12px 24px;
+            padding: 10px 20px;
             border-radius: 50px;
-            font-size: 0.9em;
+            font-size: 0.85em;
             font-weight: 500;
             border: 1px solid rgba(255,255,255,0.1);
             transition: all 0.2s;
@@ -192,26 +220,33 @@
             color: #fff;
         }
 
-        /* Footer */
+        /* Full-width Windy radar */
+        .radar-fullwidth { width: 100%; }
+        .radar-fullwidth iframe {
+            width: 100%;
+            height: 70vh;
+            border: none;
+            display: block;
+        }
+
         footer {
             text-align: center;
             padding: 30px 20px;
-            color: #4a5568;
+            color: #90cdf4;
             font-size: 0.85em;
         }
-        footer a { color: #4299e1; text-decoration: none; }
+        footer a { color: #63b3ed; text-decoration: none; }
         footer a:hover { text-decoration: underline; }
 
-        /* Loading */
         .loading {
             text-align: center;
-            padding: 40px;
+            padding: 30px;
             color: #90cdf4;
         }
         .loading .spinner {
             display: inline-block;
-            width: 30px;
-            height: 30px;
+            width: 24px;
+            height: 24px;
             border: 3px solid rgba(144,205,244,0.3);
             border-top-color: #90cdf4;
             border-radius: 50%;
@@ -222,8 +257,12 @@
         @media (max-width: 600px) {
             .header h1 { font-size: 1.8em; }
             .temp-display { font-size: 3.5em; }
-            .details { gap: 15px; }
-            .radar iframe { height: 300px; }
+            .speedo-value { font-size: 3em; }
+            .details { gap: 12px; }
+            .forecast-days { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+            .day-card { padding: 10px 5px; }
+            .radar-fullwidth iframe { height: 50vh; }
+            .quick-link { padding: 8px 14px; font-size: 0.8em; }
         }
     </style>
 </head>
@@ -233,19 +272,21 @@
     <h1><span>Rolleston</span> Weather</h1>
     <p class="subtitle">Canterbury, New Zealand</p>
     <div class="location">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
         Rolleston, Selwyn
     </div>
+    <div class="updated" id="last-updated"></div>
 </div>
 
+<main>
 <div class="container">
 
-    <!-- Current conditions - populated by JavaScript -->
+    <!-- Current conditions -->
     <div class="current-weather">
         <h2>Right Now</h2>
         <div id="current-loading" class="loading">
             <div class="spinner"></div>
-            <p style="margin-top:10px;">Loading weather...</p>
+            <p style="margin-top:8px;">Loading weather...</p>
         </div>
         <div id="current-data" style="display:none;">
             <div class="condition" id="wx-condition"></div>
@@ -267,15 +308,45 @@
                     <div class="label">Rain</div>
                     <div class="value" id="wx-rain"></div>
                 </div>
+                <div class="detail-item">
+                    <div class="label">UV Index</div>
+                    <div class="value" id="wx-uv"></div>
+                </div>
+                <div class="detail-item">
+                    <div class="label">Sunrise</div>
+                    <div class="value" id="wx-sunrise"></div>
+                </div>
+                <div class="detail-item">
+                    <div class="label">Sunset</div>
+                    <div class="value" id="wx-sunset"></div>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- 3-day forecast -->
+    <div class="forecast">
+        <h2>3-Day Forecast</h2>
+        <div id="forecast-loading" class="loading">
+            <div class="spinner"></div>
+        </div>
+        <div class="forecast-days" id="forecast-days"></div>
+    </div>
+
+    <!-- Speedometer -->
+    <div class="speedo-section" id="speedo-section">
+        <h2>Your Speed</h2>
+        <div class="speedo-value" id="speedo-value">--</div>
+        <div class="speedo-unit">km/h</div>
+        <div class="speedo-bar"><div class="speedo-bar-fill" id="speedo-bar"></div></div>
+        <div class="speedo-label" id="speedo-label">Waiting for GPS...</div>
+    </div>
+
     <!-- Quick links -->
     <div class="quick-links">
-        <a class="quick-link" href="https://www.metservice.com/towns-cities/locations/rolleston" target="_blank">MetService</a>
-        <a class="quick-link" href="https://www.journeys.nzta.govt.nz/traffic/regions/3" target="_blank">Road Conditions</a>
-        <a class="quick-link" href="https://www.metservice.com/warnings/severe-weather-outlook" target="_blank">Weather Warnings</a>
+        <a class="quick-link" href="https://www.metservice.com/towns-cities/locations/rolleston" target="_blank" rel="noopener">MetService</a>
+        <a class="quick-link" href="https://www.journeys.nzta.govt.nz/highway-conditions" target="_blank" rel="noopener">Road Conditions</a>
+        <a class="quick-link" href="https://www.metservice.com/warnings/severe-weather-outlook" target="_blank" rel="noopener">Weather Warnings</a>
     </div>
 
 </div>
@@ -284,18 +355,7 @@
 <div class="radar-fullwidth">
     <iframe src="https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=8&overlay=rain&product=ecmwf&level=surface&lat=-43.591&lon=172.379&message=true&marker=true&calendar=now&pressure=true&detail=true&menu=true" loading="lazy"></iframe>
 </div>
-
-<!-- 3-day forecast below radar -->
-<div class="container">
-    <div class="forecast">
-        <h2>3-Day Forecast</h2>
-        <div id="forecast-loading" class="loading">
-            <div class="spinner"></div>
-            <p style="margin-top:10px;">Loading forecast...</p>
-        </div>
-        <div class="forecast-days" id="forecast-days"></div>
-    </div>
-</div>
+</main>
 
 <footer>
     <p>A free community resource by <a href="https://rollestontech.co.nz">Rolleston Tech Solutions</a></p>
@@ -303,7 +363,6 @@
 </footer>
 
 <script>
-// Weather codes to icons and descriptions
 const weatherCodes = {
     0: ['☀️', 'Clear sky'],
     1: ['🌤️', 'Mainly clear'], 2: ['⛅', 'Partly cloudy'], 3: ['☁️', 'Overcast'],
@@ -320,7 +379,6 @@ const weatherCodes = {
 
 const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-// Default: Rolleston
 let userLat = -43.591;
 let userLon = 172.379;
 let userLocation = 'Rolleston, Selwyn';
@@ -332,15 +390,12 @@ async function detectLocation() {
             async (pos) => {
                 userLat = pos.coords.latitude;
                 userLon = pos.coords.longitude;
-                // Reverse geocode to get place name
                 try {
                     const geo = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${userLat}&lon=${userLon}&format=json&zoom=14&accept-language=en`);
                     const geoData = await geo.json();
                     if (geoData && geoData.address) {
                         const a = geoData.address;
-                        // Prefer suburb/town/village over administrative city names
                         const place = a.suburb || a.town || a.village || a.hamlet || a.city || 'Unknown';
-                        // Clean up ugly admin names
                         const cleanPlace = place.replace(/ Community$/i, '').replace(/ Board$/i, '');
                         const region = a.state || a.county || '';
                         userLocation = cleanPlace + (region ? ', ' + region : '');
@@ -354,32 +409,51 @@ async function detectLocation() {
     });
 }
 
+function formatTime(isoStr) {
+    const d = new Date(isoStr);
+    return d.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+function uvLabel(uv) {
+    if (uv <= 2) return uv.toFixed(0) + ' Low';
+    if (uv <= 5) return uv.toFixed(0) + ' Moderate';
+    if (uv <= 7) return uv.toFixed(0) + ' High';
+    if (uv <= 10) return uv.toFixed(0) + ' Very High';
+    return uv.toFixed(0) + ' Extreme';
+}
+
 async function loadWeather() {
     try {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${userLat}&longitude=${userLon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto&forecast_days=3`;
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${userLat}&longitude=${userLon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,uv_index_max,sunrise,sunset&timezone=auto&forecast_days=3`;
         const res = await fetch(url);
         const data = await res.json();
 
-        // Current conditions
         const current = data.current;
+        const daily = data.daily;
         const code = current.weather_code;
         const [icon, desc] = weatherCodes[code] || ['🌡️', 'Unknown'];
+
+        // Wind direction arrow
+        const windDeg = current.wind_direction_10m || 0;
+        const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+        const windDir = dirs[Math.round(windDeg / 45) % 8];
 
         document.getElementById('wx-condition').textContent = icon + '  ' + desc;
         document.getElementById('wx-temp').textContent = Math.round(current.temperature_2m) + '°';
         document.getElementById('wx-feels').textContent = Math.round(current.apparent_temperature) + '°';
-        document.getElementById('wx-wind').textContent = Math.round(current.wind_speed_10m) + ' km/h';
+        document.getElementById('wx-wind').textContent = Math.round(current.wind_speed_10m) + ' ' + windDir;
         document.getElementById('wx-humidity').textContent = current.relative_humidity_2m + '%';
         document.getElementById('wx-rain').textContent = current.precipitation + ' mm';
+        document.getElementById('wx-uv').textContent = uvLabel(daily.uv_index_max[0]);
+        document.getElementById('wx-sunrise').textContent = formatTime(daily.sunrise[0]);
+        document.getElementById('wx-sunset').textContent = formatTime(daily.sunset[0]);
 
         document.getElementById('current-loading').style.display = 'none';
         document.getElementById('current-data').style.display = 'block';
 
-        // 7-day forecast
-        const daily = data.daily;
+        // 3-day forecast
         const container = document.getElementById('forecast-days');
         container.innerHTML = '';
-
         for (let i = 0; i < 3; i++) {
             const date = new Date(daily.time[i] + 'T00:00:00');
             const dayName = i === 0 ? 'Today' : dayNames[date.getDay()];
@@ -387,6 +461,7 @@ async function loadWeather() {
             const high = Math.round(daily.temperature_2m_max[i]);
             const low = Math.round(daily.temperature_2m_min[i]);
             const rain = daily.precipitation_sum[i];
+            const uv = daily.uv_index_max[i];
 
             const card = document.createElement('div');
             card.className = 'day-card';
@@ -395,37 +470,95 @@ async function loadWeather() {
                 <div class="day-icon">${dayIcon}</div>
                 <div class="day-temps">${high}° <span class="low">${low}°</span></div>
                 ${rain > 0 ? `<div class="day-rain">💧 ${rain.toFixed(1)}mm</div>` : '<div class="day-rain">&nbsp;</div>'}
+                <div class="day-rain">UV ${Math.round(uv)}</div>
             `;
             container.appendChild(card);
         }
-
         document.getElementById('forecast-loading').style.display = 'none';
+
+        // Update timestamp
+        const now = new Date();
+        document.getElementById('last-updated').textContent = 'Updated ' + now.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: true });
 
     } catch (e) {
         document.getElementById('current-loading').innerHTML = '<p>Could not load weather. <a href="https://www.metservice.com/towns-cities/locations/rolleston" style="color:#4299e1;">View on MetService</a></p>';
-        document.getElementById('forecast-loading').innerHTML = '<p>Could not load forecast.</p>';
+        document.getElementById('forecast-loading').innerHTML = '';
     }
 }
 
-// Detect location, update UI, then load weather
+// === SPEEDOMETER ===
+function initSpeedo() {
+    if (!navigator.geolocation) {
+        document.getElementById('speedo-label').textContent = 'GPS not available';
+        return;
+    }
+    navigator.geolocation.watchPosition(
+        (pos) => {
+            let speed = pos.coords.speed; // m/s, can be null
+            if (speed === null || speed === undefined) {
+                document.getElementById('speedo-value').textContent = '0';
+                document.getElementById('speedo-label').textContent = 'Stationary';
+                document.getElementById('speedo-bar').style.width = '0%';
+                document.getElementById('speedo-bar').style.background = '#48bb78';
+                return;
+            }
+            const kmh = Math.round(speed * 3.6);
+            document.getElementById('speedo-value').textContent = kmh;
+
+            // Bar fill (max 120 km/h)
+            const pct = Math.min(kmh / 120 * 100, 100);
+            const bar = document.getElementById('speedo-bar');
+            bar.style.width = pct + '%';
+
+            // Color based on speed
+            if (kmh <= 5) {
+                bar.style.background = '#48bb78';
+                document.getElementById('speedo-label').textContent = 'Walking';
+            } else if (kmh <= 15) {
+                bar.style.background = '#48bb78';
+                document.getElementById('speedo-label').textContent = 'Running / Cycling';
+            } else if (kmh <= 50) {
+                bar.style.background = '#4299e1';
+                document.getElementById('speedo-label').textContent = 'Urban driving';
+            } else if (kmh <= 100) {
+                bar.style.background = '#ecc94b';
+                document.getElementById('speedo-label').textContent = 'Open road';
+            } else {
+                bar.style.background = '#e53e3e';
+                document.getElementById('speedo-label').textContent = 'Motorway';
+            }
+        },
+        () => {
+            document.getElementById('speedo-label').textContent = 'Location access needed for speed';
+        },
+        { enableHighAccuracy: true, maximumAge: 1000 }
+    );
+}
+
+// Init
 (async () => {
     const detected = await detectLocation();
-    // Update header location badge
-    document.querySelector('.header .location').innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-        ${userLocation}${detected ? '' : ' (default)'}
-    `;
-    // Update page title
+    const locEl = document.querySelector('.header .location');
+    locEl.textContent = userLocation + (detected ? '' : ' (default)');
+
     const placeName = userLocation.split(',')[0];
-    document.querySelector('.header h1').innerHTML = `<span>${placeName}</span> Weather`;
-    // Update Windy iframe to user's location
+    const h1 = document.querySelector('.header h1');
+    h1.innerHTML = '';
+    const span = document.createElement('span');
+    span.textContent = placeName;
+    h1.appendChild(span);
+    h1.appendChild(document.createTextNode(' Weather'));
+
+    // Update Windy iframe
     const windyFrame = document.querySelector('.radar-fullwidth iframe');
     if (windyFrame) {
         windyFrame.src = `https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=8&overlay=rain&product=ecmwf&level=surface&lat=${userLat}&lon=${userLon}&message=true&marker=true&calendar=now&pressure=true&detail=true&menu=true`;
     }
+
     await loadWeather();
+    initSpeedo();
 })();
-// Refresh every 10 minutes
+
 setInterval(loadWeather, 600000);
 </script>
 
