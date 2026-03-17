@@ -551,6 +551,78 @@ async function getWind(lat, lon) {
     } catch(e) { return { speed: 0, direction: 0, gusts: 0 }; }
 }
 
+// Fetch wind at multiple points along the route
+async function getWindMultipoint(coords) {
+    // Sample up to 8 points along the route
+    const numPoints = Math.min(8, Math.max(2, Math.floor(coords.length / 50)));
+    const step = Math.floor(coords.length / numPoints);
+    const points = [];
+    for (let i = 0; i < coords.length; i += step) {
+        points.push({ idx: i, lat: coords[i][1], lon: coords[i][0] });
+    }
+    // Always include last point
+    const lastCoord = coords[coords.length - 1];
+    if (points[points.length - 1].idx !== coords.length - 1) {
+        points.push({ idx: coords.length - 1, lat: lastCoord[1], lon: lastCoord[0] });
+    }
+
+    // Batch fetch - Open-Meteo supports comma-separated coordinates
+    const lats = points.map(p => p.lat).join(',');
+    const lons = points.map(p => p.lon).join(',');
+
+    try {
+        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&timezone=auto`);
+        const data = await res.json();
+
+        // Multi-location returns array, single location returns object
+        if (Array.isArray(data)) {
+            return points.map((p, i) => ({
+                idx: p.idx,
+                lat: p.lat,
+                lon: p.lon,
+                speed: data[i].current.wind_speed_10m,
+                direction: data[i].current.wind_direction_10m,
+                gusts: data[i].current.wind_gusts_10m
+            }));
+        } else {
+            // Single point fallback
+            return points.map(p => ({
+                idx: p.idx, lat: p.lat, lon: p.lon,
+                speed: data.current.wind_speed_10m,
+                direction: data.current.wind_direction_10m,
+                gusts: data.current.wind_gusts_10m
+            }));
+        }
+    } catch(e) {
+        return points.map(p => ({ idx: p.idx, lat: p.lat, lon: p.lon, speed: 0, direction: 0, gusts: 0 }));
+    }
+}
+
+// Get interpolated wind for a specific coordinate index based on multipoint data
+function getWindAtIndex(windPoints, coordIdx) {
+    // Find the two surrounding wind sample points
+    for (let i = 0; i < windPoints.length - 1; i++) {
+        if (coordIdx >= windPoints[i].idx && coordIdx <= windPoints[i + 1].idx) {
+            const range = windPoints[i + 1].idx - windPoints[i].idx;
+            const t = range === 0 ? 0 : (coordIdx - windPoints[i].idx) / range;
+            // Interpolate speed linearly
+            const speed = windPoints[i].speed + t * (windPoints[i + 1].speed - windPoints[i].speed);
+            // Interpolate direction (handle wrap-around)
+            const dir1 = windPoints[i].direction;
+            const dir2 = windPoints[i + 1].direction;
+            let dDiff = dir2 - dir1;
+            if (dDiff > 180) dDiff -= 360;
+            if (dDiff < -180) dDiff += 360;
+            const direction = ((dir1 + t * dDiff) + 360) % 360;
+            const gusts = windPoints[i].gusts + t * (windPoints[i + 1].gusts - windPoints[i].gusts);
+            return { speed, direction, gusts };
+        }
+    }
+    // Past the last point, use last value
+    const last = windPoints[windPoints.length - 1];
+    return { speed: last.speed, direction: last.direction, gusts: last.gusts };
+}
+
 // === ELEVATION ===
 async function getElevations(coords) {
     // Sample up to 50 points along the route
@@ -616,9 +688,13 @@ async function planRoute() {
         const distKm = (route.distance / 1000).toFixed(1);
         const durMin = Math.round(route.duration / 60);
 
-        // Get wind at midpoint
-        const midIdx = Math.floor(coords.length / 2);
-        const wind = await getWind(coords[midIdx][1], coords[midIdx][0]);
+        // Get wind at multiple points along route
+        const windPoints = await getWindMultipoint(coords);
+        // Average wind for summary display
+        const avgSpeed = windPoints.reduce((s, p) => s + p.speed, 0) / windPoints.length;
+        const avgGusts = Math.max(...windPoints.map(p => p.gusts));
+        const avgDir = windPoints[Math.floor(windPoints.length / 2)].direction;
+        const wind = { speed: avgSpeed, direction: avgDir, gusts: avgGusts };
 
         // Get elevation
         const { elevations, sampled } = await getElevations(coords);
@@ -641,7 +717,8 @@ async function planRoute() {
 
         for (let i = 0; i < coords.length - 1; i++) {
             const bearing = calcBearing(coords[i][1], coords[i][0], coords[i+1][1], coords[i+1][0]);
-            const windTo = (wind.direction + 180) % 360;
+            const localWind = getWindAtIndex(windPoints, i);
+            const windTo = (localWind.direction + 180) % 360;
             const diff = angleDiff(bearing, windTo);
             const score = Math.cos(diff * Math.PI / 180);
             tailwindScore += score;
@@ -668,19 +745,18 @@ async function planRoute() {
         });
         routeLayer.addTo(map);
 
-        // Wind arrows (SVG, pointing where wind blows TO)
-        const arrowInterval = Math.max(1, Math.floor(coords.length / 8));
-        const windTo = (wind.direction + 180) % 360;
-        for (let i = 0; i < coords.length; i += arrowInterval) {
-            const arrow = L.marker([coords[i][1], coords[i][0]], {
+        // Wind arrows at each sample point (SVG, pointing where wind blows TO)
+        windPoints.forEach(wp => {
+            const localWindTo = (wp.direction + 180) % 360;
+            const arrow = L.marker([wp.lat, wp.lon], {
                 icon: L.divIcon({
-                    html: `<svg width="22" height="22" viewBox="0 0 24 24" style="transform:rotate(${windTo}deg);filter:drop-shadow(0 0 2px rgba(0,0,0,0.5));"><path d="M12 2 L12 22 M12 22 L8 16 M12 22 L16 16" stroke="#bee3f8" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>`,
-                    iconSize: [22, 22], iconAnchor: [11, 11], className: ''
+                    html: `<svg width="24" height="24" viewBox="0 0 24 24" style="transform:rotate(${localWindTo}deg);filter:drop-shadow(0 0 2px rgba(0,0,0,0.5));"><path d="M12 2 L12 22 M12 22 L8 16 M12 22 L16 16" stroke="#bee3f8" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>`,
+                    iconSize: [24, 24], iconAnchor: [12, 12], className: ''
                 })
-            });
+            }).bindPopup(`Wind: ${Math.round(wp.speed)} km/h from ${['N','NE','E','SE','S','SW','W','NW'][Math.round(wp.direction / 45) % 8]}`);
             windArrows.push(arrow);
             arrow.addTo(map);
-        }
+        });
 
         map.fitBounds(L.latLngBounds(leafletCoords).pad(0.1));
 
