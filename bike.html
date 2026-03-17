@@ -663,82 +663,142 @@ async function getElevations(coords) {
 let altRouteLayers = []; // Store alternative route layers for toggling
 let scoredRoutes = []; // Store scored route data
 
+// === CYCLING PHYSICS ===
+// Real power calculation for each route segment
+// P_total = P_gravity + P_drag + P_rolling
+// If P_total < 0, cyclist is coasting (0 effort)
+
+const PHYSICS = {
+    mass: 85,          // rider + bike (kg) — 75kg rider + 10kg bike
+    CdA: 0.4,         // drag coefficient * frontal area (m²) — upright casual cyclist
+    Crr: 0.005,       // rolling resistance coefficient — road tyres on asphalt
+    airDensity: 1.225, // kg/m³ at sea level
+    g: 9.81,           // gravity m/s²
+    riderSpeed: 5.0    // base cycling speed m/s (~18 km/h)
+};
+
+function segmentPowerWatts(gradient, headwindMs) {
+    // gradient: decimal (0.05 = 5%)
+    // headwindMs: m/s (positive = headwind, negative = tailwind)
+    const v = PHYSICS.riderSpeed; // bike speed m/s
+    const m = PHYSICS.mass;
+
+    // Gravity: m * g * sin(gradient) * v
+    // For small gradients sin(gradient) ≈ gradient
+    const pGravity = m * PHYSICS.g * gradient * v;
+
+    // Aerodynamic drag: 0.5 * CdA * rho * (v + headwind)² * v
+    // Effective air speed = bike speed + headwind (headwind adds, tailwind subtracts)
+    const vAir = v + headwindMs;
+    const pDrag = 0.5 * PHYSICS.CdA * PHYSICS.airDensity * vAir * Math.abs(vAir) * v;
+
+    // Rolling resistance: Crr * m * g * cos(gradient) * v
+    const pRoll = PHYSICS.Crr * m * PHYSICS.g * Math.cos(Math.atan(gradient)) * v;
+
+    const total = pGravity + pDrag + pRoll;
+
+    // If total is negative (steep downhill + tailwind), effort is 0 (coasting)
+    return Math.max(0, total);
+}
+
 async function scoreRoute(route, windPointsCache) {
     const coords = route.geometry.coordinates;
     const distKm = route.distance / 1000;
     const durMin = route.duration / 60;
 
-    // Get wind — reuse cache from first route's area, fetch new if needed
-    let windPoints;
-    if (windPointsCache) {
-        windPoints = windPointsCache;
-    } else {
-        windPoints = await getWindMultipoint(coords);
-    }
+    // Get wind
+    const windPoints = windPointsCache || await getWindMultipoint(coords);
 
-    // Get elevation
-    const { elevations } = await getElevations(coords);
+    // Get elevation (LINZ 8m)
+    const { elevations, sampled } = await getElevations(coords);
 
-    // Calculate climb/descent
+    // Calculate per-segment physics
     let totalClimb = 0, totalDescent = 0;
-    for (let i = 1; i < elevations.length; i++) {
-        const diff = elevations[i] - elevations[i - 1];
-        if (diff > 0) totalClimb += diff;
-        else totalDescent += Math.abs(diff);
-    }
-
-    // Calculate wind score per segment
+    let totalEnergyJoules = 0;
+    let totalTimeSeconds = 0;
     let tailwindScore = 0, totalSegments = 0;
-    for (let i = 0; i < coords.length - 1; i++) {
-        const bearing = calcBearing(coords[i][1], coords[i][0], coords[i+1][1], coords[i+1][0]);
-        const localWind = getWindAtIndex(windPoints, i);
-        const windTo = (localWind.direction + 180) % 360;
-        const diff = angleDiff(bearing, windTo);
-        tailwindScore += Math.cos(diff * Math.PI / 180);
-        totalSegments++;
+
+    // Map elevation samples back to coordinate indices
+    // elevations has ~100 samples, coords can have thousands
+    // We need elevation at each coord — interpolate
+    const elevStep = Math.max(1, Math.floor(coords.length / elevations.length));
+
+    function getElevAtCoord(idx) {
+        const ei = Math.min(Math.floor(idx / elevStep), elevations.length - 1);
+        const ei2 = Math.min(ei + 1, elevations.length - 1);
+        if (ei === ei2) return elevations[ei];
+        const t = (idx % elevStep) / elevStep;
+        return elevations[ei] + t * (elevations[ei2] - elevations[ei]);
     }
 
-    const avgWindScore = totalSegments > 0 ? tailwindScore / totalSegments : 0;
-    const windPct = (avgWindScore + 1) / 2 * 100; // 0-100
+    for (let i = 0; i < coords.length - 1; i++) {
+        // Segment distance (metres)
+        const lat1 = coords[i][1], lon1 = coords[i][0];
+        const lat2 = coords[i+1][1], lon2 = coords[i+1][0];
+        const segDist = haversineM(lat1, lon1, lat2, lon2);
+        if (segDist < 0.5) continue; // skip tiny segments
 
-    // === REAL EFFORT CALCULATION ===
-    // Effort in watts approximation for a cyclist:
-    // Base effort = distance (longer = more effort)
-    // Climbing penalty = 4x multiplier per metre gained (climbing is ~4x harder than flat per unit)
-    // Headwind penalty = wind speed * headwind factor (fighting wind burns energy)
-    // Tailwind bonus = reduces effort
+        // Gradient
+        const elev1 = getElevAtCoord(i);
+        const elev2 = getElevAtCoord(i + 1);
+        const elevChange = elev2 - elev1;
+        const gradient = segDist > 0 ? elevChange / segDist : 0;
 
-    // Base effort from distance (joules-ish, arbitrary units)
-    const baseEffort = distKm * 100;
+        if (elevChange > 0) totalClimb += elevChange;
+        else totalDescent += Math.abs(elevChange);
 
-    // Climbing effort: each metre of climbing ~ equivalent to 400m of flat riding
-    const climbEffort = totalClimb * 4;
+        // Wind at this segment
+        const bearing = calcBearing(lat1, lon1, lat2, lon2);
+        const localWind = getWindAtIndex(windPoints, i);
+        const windSpeedMs = localWind.speed / 3.6; // km/h to m/s
 
-    // Wind effort: average wind effect across the route
-    // avgWindScore ranges from -1 (pure headwind) to +1 (pure tailwind)
+        // Headwind component: positive = headwind, negative = tailwind
+        const windFrom = localWind.direction; // direction wind comes FROM
+        const windTo = (windFrom + 180) % 360;
+        const angleDiffDeg = angleDiff(bearing, windTo);
+        const headwindMs = -windSpeedMs * Math.cos(angleDiffDeg * Math.PI / 180);
+        // headwindMs: positive when wind opposes you, negative when wind helps
+
+        // Wind score for colour coding
+        tailwindScore += Math.cos(angleDiffDeg * Math.PI / 180);
+        totalSegments++;
+
+        // Power required for this segment
+        const watts = segmentPowerWatts(gradient, headwindMs);
+
+        // Time for this segment (at rider speed, adjusted for gradient)
+        // On steep uphills, speed drops; on downhills, speed increases
+        let segSpeed = PHYSICS.riderSpeed; // base 5 m/s
+        if (gradient > 0.02) segSpeed = Math.max(1.5, segSpeed - gradient * 30); // slow on climbs
+        else if (gradient < -0.02) segSpeed = Math.min(15, segSpeed - gradient * 20); // faster downhill
+        // Headwind slows you, tailwind speeds you
+        segSpeed = Math.max(1.5, segSpeed - headwindMs * 0.3);
+
+        const segTime = segDist / segSpeed;
+
+        // Energy = watts * time (joules)
+        totalEnergyJoules += watts * segTime;
+        totalTimeSeconds += segTime;
+    }
+
     const avgWindScore = totalSegments > 0 ? tailwindScore / totalSegments : 0;
     const avgSpeed = windPoints.reduce((s, p) => s + p.speed, 0) / windPoints.length;
     const avgGusts = Math.max(...windPoints.map(p => p.gusts));
     const avgDir = windPoints[Math.floor(windPoints.length / 2)].direction;
 
-    // Wind effort penalty/bonus: headwind adds effort, tailwind reduces it
-    // Scale by wind speed — stronger wind = bigger effect
-    const windEffort = -avgWindScore * avgSpeed * distKm * 0.5;
+    // Total effort in kilojoules
+    const totalEffortKJ = totalEnergyJoules / 1000;
+    const adjustedTimeMin = totalTimeSeconds / 60;
 
-    // Total effort (lower = easier ride)
-    const totalEffort = baseEffort + climbEffort + windEffort;
-
-    // Estimated adjusted time: base cycling time adjusted for wind and hills
-    // Average cycling speed ~18 km/h on flat, reduced by headwind/hills
-    const baseCyclingSpeed = 18; // km/h
-    const windSpeedEffect = avgWindScore * avgSpeed * 0.3; // tailwind adds speed, headwind reduces
-    const hillSpeedEffect = (totalClimb > 0) ? -(totalClimb / distKm) * 2 : 0; // climbing slows you down
-    const adjustedSpeed = Math.max(5, baseCyclingSpeed + windSpeedEffect + hillSpeedEffect);
-    const adjustedTimeMin = (distKm / adjustedSpeed) * 60;
+    // Effort per km (useful for comparing routes of different lengths)
+    const effortPerKm = distKm > 0 ? totalEffortKJ / distKm : 0;
 
     return {
         route, coords, distKm, durMin, windPoints, elevations,
-        totalClimb, totalDescent, totalEffort, adjustedTimeMin,
+        totalClimb, totalDescent,
+        totalEffort: totalEffortKJ,
+        effortPerKm,
+        adjustedTimeMin,
         windPct: Math.round((avgWindScore + 1) / 2 * 100),
         avgWindScore,
         wind: { speed: avgSpeed, direction: avgDir, gusts: avgGusts }
@@ -833,7 +893,7 @@ function displayRoute(scored, isBest) {
 }
 
 function updateInfoPanel(scored, routeIndex, totalRoutes) {
-    const { coords, distKm, durMin, wind, totalClimb, totalDescent, adjustedTimeMin, totalEffort, windPct, avgWindScore, elevations, route } = scored;
+    const { coords, distKm, durMin, wind, totalClimb, totalDescent, adjustedTimeMin, totalEffort, effortPerKm, windPct, avgWindScore, elevations, route } = scored;
     const dirs = ['N','NE','E','SE','S','SW','W','NW'];
     const windDirLabel = dirs[Math.round(wind.direction / 45) % 8];
 
@@ -843,8 +903,11 @@ function updateInfoPanel(scored, routeIndex, totalRoutes) {
     document.getElementById('route-climb').textContent = Math.round(totalClimb) + ' m';
     document.getElementById('route-descent').textContent = Math.round(totalDescent) + ' m';
 
+    // Effort bar — scale relative to best route
+    const bestEffort = scoredRoutes.length > 0 ? scoredRoutes[0].totalEffort : totalEffort;
+    const effortRatio = bestEffort > 0 ? Math.min(100, (totalEffort / bestEffort) * 60) : 50;
     const scoreFill = document.getElementById('score-fill');
-    scoreFill.style.width = windPct + '%';
+    scoreFill.style.width = effortRatio + '%';
 
     // Build a clear recommendation
     let reasons = [];
@@ -856,26 +919,33 @@ function updateInfoPanel(scored, routeIndex, totalRoutes) {
     else if (totalDescent > totalClimb + 20) reasons.push('mostly downhill');
     else if (totalClimb > 50) reasons.push(Math.round(totalClimb) + 'm climbing');
 
+    const effortStr = Math.round(totalEffort) + ' kJ';
     let scoreMsg;
     if (totalRoutes > 1 && routeIndex === 0) {
         scoreFill.style.background = '#48bb78';
-        const savings = scoredRoutes.length > 1 ? Math.round(scoredRoutes[scoredRoutes.length - 1].adjustedTimeMin - adjustedTimeMin) : 0;
-        scoreMsg = `✅ TAKE THIS ROUTE — ${reasons.join(', ')}`;
-        if (savings > 1) scoreMsg += `. Saves ~${savings} min vs worst option`;
+        const worstEffort = scoredRoutes[scoredRoutes.length - 1].totalEffort;
+        const savings = Math.round(((worstEffort - totalEffort) / worstEffort) * 100);
+        const timeSaved = Math.round(scoredRoutes[scoredRoutes.length - 1].adjustedTimeMin - adjustedTimeMin);
+        scoreMsg = `✅ TAKE THIS ROUTE — ${effortStr} effort (${reasons.join(', ')})`;
+        if (savings > 5) scoreMsg += `. ${savings}% less effort than worst`;
+        if (timeSaved > 1) scoreMsg += `, ~${timeSaved} min faster`;
     } else if (totalRoutes > 1) {
         const extraEffort = Math.round(((totalEffort / scoredRoutes[0].totalEffort) - 1) * 100);
-        if (extraEffort > 0) {
-            scoreFill.style.background = extraEffort > 20 ? '#e53e3e' : '#ecc94b';
-            scoreMsg = `Route ${routeIndex + 1} — ${extraEffort}% harder (${reasons.join(', ')})`;
+        if (extraEffort > 15) {
+            scoreFill.style.background = '#e53e3e';
+            scoreMsg = `Route ${routeIndex + 1} — ${effortStr}, ${extraEffort}% harder (${reasons.join(', ')})`;
+        } else if (extraEffort > 5) {
+            scoreFill.style.background = '#ecc94b';
+            scoreMsg = `Route ${routeIndex + 1} — ${effortStr}, ${extraEffort}% harder (${reasons.join(', ')})`;
         } else {
             scoreFill.style.background = '#4299e1';
-            scoreMsg = `Route ${routeIndex + 1} — similar effort (${reasons.join(', ')})`;
+            scoreMsg = `Route ${routeIndex + 1} — ${effortStr}, similar effort (${reasons.join(', ')})`;
         }
     } else {
         // Single route
-        if (windPct >= 60) { scoreFill.style.background = '#48bb78'; scoreMsg = `Good ride — ${reasons.join(', ')} 🎉`; }
-        else if (windPct >= 40) { scoreFill.style.background = '#4299e1'; scoreMsg = `Mixed conditions — ${reasons.join(', ')}`; }
-        else { scoreFill.style.background = '#ecc94b'; scoreMsg = `Tough ride — ${reasons.join(', ')}. Try reversing ⇄`; }
+        if (effortPerKm < 15) { scoreFill.style.background = '#48bb78'; scoreMsg = `Easy ride — ${effortStr} (${reasons.join(', ')}) 🎉`; }
+        else if (effortPerKm < 25) { scoreFill.style.background = '#4299e1'; scoreMsg = `Moderate ride — ${effortStr} (${reasons.join(', ')})`; }
+        else { scoreFill.style.background = '#ecc94b'; scoreMsg = `Hard ride — ${effortStr} (${reasons.join(', ')}). Try reversing ⇄`; }
     }
 
     document.getElementById('score-text').textContent = scoreMsg;
@@ -1159,6 +1229,13 @@ function calcBearing(lat1, lon1, lat2, lon2) {
     return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
 }
 function angleDiff(a, b) { let d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; }
+function haversineM(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
 function showStatus(msg) { const el = document.getElementById('status-msg'); el.textContent = msg; el.style.display = 'block'; }
 function hideStatus() { document.getElementById('status-msg').style.display = 'none'; }
 
