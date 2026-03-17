@@ -300,9 +300,12 @@
 <div style="position:relative;flex:1;display:flex;flex-direction:column;">
     <div id="map"></div>
     <div class="status-msg" id="status-msg"></div>
-    <div class="compass" id="compass">
-        <div class="compass-arrow" id="compass-arrow">➤</div>
-        <div class="compass-label" id="compass-label">--</div>
+    <div class="compass" id="compass" title="Hold phone flat and point the top towards where you're heading">
+        <div class="compass-arrow" id="compass-arrow">⬆</div>
+        <div class="compass-label" id="compass-label">Hold flat</div>
+    </div>
+    <div id="compass-hint" style="position:absolute;top:125px;left:10px;background:rgba(26,32,44,0.9);padding:6px 10px;border-radius:6px;font-size:0.7em;color:#90cdf4;z-index:800;max-width:140px;display:none;">
+        Point the top of your phone where you're heading
     </div>
     <div class="map-ad">
         <a href="https://rollestontech.co.nz" target="_blank" rel="noopener">🔧 Rolleston Tech Solutions</a>
@@ -311,7 +314,19 @@
 </div>
 
 <div class="info-panel" id="info-panel">
-    <h3>Route Summary</h3>
+    <div id="route-direction" style="background:rgba(72,187,120,0.15);border:1px solid #48bb78;border-radius:10px;padding:12px 15px;margin-bottom:12px;display:flex;align-items:center;gap:12px;">
+        <div id="dir-arrow" style="font-size:2em;line-height:1;">➤</div>
+        <div>
+            <div id="dir-heading" style="font-weight:600;font-size:1em;">--</div>
+            <div id="dir-street" style="font-size:0.8em;color:#90cdf4;margin-top:2px;">--</div>
+        </div>
+    </div>
+    <div id="route-steps" style="display:none;margin-bottom:12px;max-height:120px;overflow-y:auto;background:rgba(255,255,255,0.03);border-radius:8px;padding:8px 12px;">
+    </div>
+    <h3 style="display:flex;justify-content:space-between;align-items:center;">
+        Route Summary
+        <span id="toggle-steps" style="font-size:0.8em;color:#63b3ed;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0;" onclick="document.getElementById('route-steps').style.display=document.getElementById('route-steps').style.display==='none'?'block':'none'">Show directions ▼</span>
+    </h3>
     <div class="info-grid">
         <div class="info-item">
             <div class="info-val" id="route-dist">--</div>
@@ -411,6 +426,8 @@ function clearRoute() {
     windArrows.forEach(a => map.removeLayer(a));
     windArrows = [];
     document.getElementById('info-panel').style.display = 'none';
+    routeStartBearing = null;
+    document.getElementById('compass-hint').style.display = 'none';
 }
 
 map.on('click', async function(e) {
@@ -705,6 +722,59 @@ async function planRoute() {
         // Update legend
         document.getElementById('legend-box').innerHTML = `<strong>Route:</strong><br><span style="color:#48bb78">■</span> Tailwind<br><span style="color:#4299e1">■</span> Slight tailwind<br><span style="color:#ecc94b">■</span> Slight headwind<br><span style="color:#e53e3e">■</span> Headwind<br><br>Wind: ${Math.round(wind.speed)} km/h ${windDirLabel}${wind.gusts > wind.speed + 5 ? '<br>Gusts: ' + Math.round(wind.gusts) + ' km/h' : ''}`;
 
+        // Direction indicator - which way to start riding
+        const startBearing = calcBearing(coords[0][1], coords[0][0], coords[Math.min(5, coords.length-1)][1], coords[Math.min(5, coords.length-1)][0]);
+        routeStartBearing = startBearing; // Store for compass comparison
+        if (currentHeading !== null) updateCompass(currentHeading); // Refresh compass hint
+        const startDirIdx = Math.round(startBearing / 45) % 8;
+        const dirNames = ['North','Northeast','East','Southeast','South','Southwest','West','Northwest'];
+        const dirArrows = ['⬆️','↗️','➡️','↘️','⬇️','↙️','⬅️','↖️'];
+        document.getElementById('dir-arrow').textContent = dirArrows[startDirIdx];
+        document.getElementById('dir-heading').textContent = 'Start heading ' + dirNames[startDirIdx];
+        const fromName = document.getElementById('input-from').value.split(',')[0];
+        const toName = document.getElementById('input-to').value.split(',')[0];
+        document.getElementById('dir-street').textContent = fromName + '  →  ' + toName;
+
+        // Direction arrows on the route (every ~500m or so)
+        const arrowStep = Math.max(1, Math.floor(coords.length / 15));
+        for (let i = 0; i < coords.length - arrowStep; i += arrowStep) {
+            const segBearing = calcBearing(coords[i][1], coords[i][0], coords[i+arrowStep][1], coords[i+arrowStep][0]);
+            const dirMarker = L.marker([coords[i][1], coords[i][0]], {
+                icon: L.divIcon({
+                    html: `<svg width="16" height="16" viewBox="0 0 24 24" style="transform:rotate(${segBearing}deg);"><path d="M12 2 L12 18 M12 2 L8 8 M12 2 L16 8" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.7"/></svg>`,
+                    iconSize: [16, 16], iconAnchor: [8, 8], className: ''
+                }),
+                interactive: false
+            });
+            routeLayer.addLayer(dirMarker);
+        }
+
+        // Turn-by-turn steps from OSRM
+        const steps = route.legs[0].steps;
+        const stepsContainer = document.getElementById('route-steps');
+        stepsContainer.innerHTML = '';
+        steps.forEach((step, i) => {
+            if (!step.name && !step.maneuver) return;
+            const maneuver = step.maneuver || {};
+            const turnType = maneuver.type || '';
+            const modifier = maneuver.modifier || '';
+            let icon = '➡️';
+            if (turnType === 'depart') icon = '🚴';
+            else if (turnType === 'arrive') icon = '🏁';
+            else if (modifier.includes('left')) icon = '⬅️';
+            else if (modifier.includes('right')) icon = '➡️';
+            else if (modifier.includes('straight')) icon = '⬆️';
+            else if (turnType === 'roundabout') icon = '🔄';
+
+            const stepDist = step.distance > 1000 ? (step.distance/1000).toFixed(1) + ' km' : Math.round(step.distance) + ' m';
+            const stepName = step.name || 'Unnamed road';
+
+            const div = document.createElement('div');
+            div.style.cssText = 'padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:0.8em;display:flex;gap:8px;align-items:center;';
+            div.innerHTML = `<span style="font-size:1.1em;">${icon}</span><span style="flex:1;color:#e2e8f0;">${stepName}</span><span style="color:#718096;white-space:nowrap;">${stepDist}</span>`;
+            stepsContainer.appendChild(div);
+        });
+
         document.getElementById('info-panel').style.display = 'block';
         hideStatus();
 
@@ -804,11 +874,39 @@ function handleOrientation(e) {
     if (heading !== null) updateCompass(heading);
 }
 
+let currentHeading = null;
+let routeStartBearing = null;
+
 function updateCompass(heading) {
+    currentHeading = heading;
     const h = Math.round(heading);
+    // Arrow points north, rotated by heading (so it always points to geographic north)
+    // But we want to show which way the USER is facing, so rotate the arrow BY heading
     document.getElementById('compass-arrow').style.transform = `rotate(${h}deg)`;
     const dirs = ['N','NE','E','SE','S','SW','W','NW'];
-    document.getElementById('compass-label').textContent = dirs[Math.round(h / 45) % 8] + ' ' + h + '°';
+    const dirLabel = dirs[Math.round(h / 45) % 8];
+    document.getElementById('compass-label').textContent = 'Facing ' + dirLabel;
+
+    // If we have a route, show if user is facing the right way
+    if (routeStartBearing !== null) {
+        const diff = angleDiff(h, routeStartBearing);
+        const hint = document.getElementById('compass-hint');
+        if (diff < 30) {
+            hint.textContent = '✅ You\'re facing the right way!';
+            hint.style.display = 'block';
+            hint.style.borderColor = '#48bb78';
+        } else if (diff < 90) {
+            const turnDir = ((routeStartBearing - h + 360) % 360) < 180 ? 'right' : 'left';
+            hint.textContent = `↩ Turn slightly ${turnDir}`;
+            hint.style.display = 'block';
+            hint.style.borderColor = '#ecc94b';
+        } else {
+            const turnDir = ((routeStartBearing - h + 360) % 360) < 180 ? 'right' : 'left';
+            hint.textContent = `⚠️ Turn ${turnDir} — you're facing the wrong way`;
+            hint.style.display = 'block';
+            hint.style.borderColor = '#e53e3e';
+        }
+    }
 }
 
 // === HELPERS ===
