@@ -271,16 +271,6 @@
         </div>
     </div>
 
-    <!-- 7 day forecast -->
-    <div class="forecast">
-        <h2>7-Day Forecast</h2>
-        <div id="forecast-loading" class="loading">
-            <div class="spinner"></div>
-            <p style="margin-top:10px;">Loading forecast...</p>
-        </div>
-        <div class="forecast-days" id="forecast-days"></div>
-    </div>
-
     <!-- Quick links -->
     <div class="quick-links">
         <a class="quick-link" href="https://www.metservice.com/towns-cities/locations/rolleston" target="_blank">MetService</a>
@@ -293,6 +283,18 @@
 <!-- Full-width Windy radar -->
 <div class="radar-fullwidth">
     <iframe src="https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=8&overlay=rain&product=ecmwf&level=surface&lat=-43.591&lon=172.379&message=true&marker=true&calendar=now&pressure=true&detail=true&menu=true" loading="lazy"></iframe>
+</div>
+
+<!-- 3-day forecast below radar -->
+<div class="container">
+    <div class="forecast">
+        <h2>3-Day Forecast</h2>
+        <div id="forecast-loading" class="loading">
+            <div class="spinner"></div>
+            <p style="margin-top:10px;">Loading forecast...</p>
+        </div>
+        <div class="forecast-days" id="forecast-days"></div>
+    </div>
 </div>
 
 <footer>
@@ -349,7 +351,7 @@ async function detectLocation() {
 
 async function loadWeather() {
     try {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${userLat}&longitude=${userLon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto&forecast_days=7`;
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${userLat}&longitude=${userLon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto&forecast_days=3`;
         const res = await fetch(url);
         const data = await res.json();
 
@@ -373,7 +375,7 @@ async function loadWeather() {
         const container = document.getElementById('forecast-days');
         container.innerHTML = '';
 
-        for (let i = 0; i < 7; i++) {
+        for (let i = 0; i < 3; i++) {
             const date = new Date(daily.time[i] + 'T00:00:00');
             const dayName = i === 0 ? 'Today' : dayNames[date.getDay()];
             const [dayIcon] = weatherCodes[daily.weather_code[i]] || ['🌡️'];
