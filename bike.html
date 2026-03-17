@@ -785,20 +785,21 @@ function displayRoute(scored, isBest) {
             }));
         }
 
-        // Wind arrows - big, bold, with speed labels
+        // Wind arrows - pointing in direction wind BLOWS TO
+        // SVG arrow points UP (north/0°) at default rotation
         windPoints.forEach(wp => {
-            const localWindTo = (wp.direction + 180) % 360;
-            const dirLabel = ['N','NE','E','SE','S','SW','W','NW'][Math.round(wp.direction / 45) % 8];
+            const windBlowsTo = (wp.direction + 180) % 360;
+            const fromLabel = ['N','NE','E','SE','S','SW','W','NW'][Math.round(wp.direction / 45) % 8];
             const speedKmh = Math.round(wp.speed);
             const arrow = L.marker([wp.lat, wp.lon], {
                 icon: L.divIcon({
                     html: `<div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.7));">
-                        <svg width="40" height="40" viewBox="0 0 24 24" style="transform:rotate(${localWindTo}deg);">
-                            <path d="M12 2 L12 20" stroke="#63b3ed" stroke-width="3" fill="none" stroke-linecap="round"/>
-                            <path d="M12 20 L7 14" stroke="#63b3ed" stroke-width="3" fill="none" stroke-linecap="round"/>
-                            <path d="M12 20 L17 14" stroke="#63b3ed" stroke-width="3" fill="none" stroke-linecap="round"/>
+                        <svg width="40" height="40" viewBox="0 0 24 24" style="transform:rotate(${windBlowsTo}deg);">
+                            <path d="M12 22 L12 4" stroke="#63b3ed" stroke-width="3" fill="none" stroke-linecap="round"/>
+                            <path d="M12 4 L7 10" stroke="#63b3ed" stroke-width="3" fill="none" stroke-linecap="round"/>
+                            <path d="M12 4 L17 10" stroke="#63b3ed" stroke-width="3" fill="none" stroke-linecap="round"/>
                         </svg>
-                        <div style="background:rgba(26,54,93,0.9);color:#bee3f8;font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;margin-top:-4px;white-space:nowrap;">${speedKmh} km/h ${dirLabel}</div>
+                        <div style="background:rgba(26,54,93,0.9);color:#bee3f8;font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;margin-top:-4px;white-space:nowrap;">${speedKmh} km/h ${fromLabel}</div>
                     </div>`,
                     iconSize: [60, 60], iconAnchor: [30, 25], className: ''
                 })
