@@ -644,6 +644,225 @@ async function getElevations(coords) {
 }
 
 // === ROUTE PLANNING ===
+let altRouteLayers = []; // Store alternative route layers for toggling
+let scoredRoutes = []; // Store scored route data
+
+async function scoreRoute(route, windPointsCache) {
+    const coords = route.geometry.coordinates;
+    const distKm = route.distance / 1000;
+    const durMin = route.duration / 60;
+
+    // Get wind — reuse cache from first route's area, fetch new if needed
+    let windPoints;
+    if (windPointsCache) {
+        windPoints = windPointsCache;
+    } else {
+        windPoints = await getWindMultipoint(coords);
+    }
+
+    // Get elevation
+    const { elevations } = await getElevations(coords);
+
+    // Calculate climb/descent
+    let totalClimb = 0, totalDescent = 0;
+    for (let i = 1; i < elevations.length; i++) {
+        const diff = elevations[i] - elevations[i - 1];
+        if (diff > 0) totalClimb += diff;
+        else totalDescent += Math.abs(diff);
+    }
+
+    // Calculate wind score per segment
+    let tailwindScore = 0, totalSegments = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+        const bearing = calcBearing(coords[i][1], coords[i][0], coords[i+1][1], coords[i+1][0]);
+        const localWind = getWindAtIndex(windPoints, i);
+        const windTo = (localWind.direction + 180) % 360;
+        const diff = angleDiff(bearing, windTo);
+        tailwindScore += Math.cos(diff * Math.PI / 180);
+        totalSegments++;
+    }
+
+    const avgWindScore = totalSegments > 0 ? tailwindScore / totalSegments : 0;
+    const windPct = (avgWindScore + 1) / 2 * 100; // 0-100
+
+    // Elevation bonus
+    const netElev = totalDescent - totalClimb;
+    const elevBonus = Math.min(10, Math.max(-10, netElev / 20));
+    const effortScore = Math.max(0, Math.min(100, windPct + elevBonus));
+
+    // Average wind summary
+    const avgSpeed = windPoints.reduce((s, p) => s + p.speed, 0) / windPoints.length;
+    const avgGusts = Math.max(...windPoints.map(p => p.gusts));
+    const avgDir = windPoints[Math.floor(windPoints.length / 2)].direction;
+
+    return {
+        route, coords, distKm, durMin, windPoints, elevations,
+        totalClimb, totalDescent, effortScore, windPct,
+        wind: { speed: avgSpeed, direction: avgDir, gusts: avgGusts }
+    };
+}
+
+function displayRoute(scored, isBest) {
+    const { route, coords, windPoints } = scored;
+    const leafletCoords = coords.map(c => [c[1], c[0]]);
+
+    // Group segments by wind colour
+    let segments = [], currentColor = null, currentCoords = [];
+    for (let i = 0; i < coords.length - 1; i++) {
+        const bearing = calcBearing(coords[i][1], coords[i][0], coords[i+1][1], coords[i+1][0]);
+        const localWind = getWindAtIndex(windPoints, i);
+        const windTo = (localWind.direction + 180) % 360;
+        const diff = angleDiff(bearing, windTo);
+
+        let color;
+        if (diff <= 45) color = '#48bb78';
+        else if (diff <= 90) color = '#4299e1';
+        else if (diff <= 135) color = '#ecc94b';
+        else color = '#e53e3e';
+
+        if (color !== currentColor) {
+            if (currentCoords.length > 1) segments.push({ color: currentColor, coords: [...currentCoords] });
+            currentColor = color;
+            currentCoords = [leafletCoords[i]];
+        }
+        currentCoords.push(leafletCoords[i + 1]);
+    }
+    if (currentCoords.length > 1) segments.push({ color: currentColor, coords: currentCoords });
+
+    const layer = L.layerGroup();
+    const weight = isBest ? 6 : 4;
+    const opacity = isBest ? 0.9 : 0.35;
+
+    segments.forEach(s => {
+        layer.addLayer(L.polyline(s.coords, { color: isBest ? s.color : '#888', weight, opacity }));
+    });
+
+    // If not the best route, make it clickable to switch
+    if (!isBest) {
+        const clickLine = L.polyline(leafletCoords, { color: 'transparent', weight: 15, opacity: 0 });
+        clickLine.on('click', () => selectRoute(scored));
+        layer.addLayer(clickLine);
+    }
+
+    // Direction arrows on best route only
+    if (isBest) {
+        const arrowStep = Math.max(1, Math.floor(coords.length / 15));
+        for (let i = 0; i < coords.length - arrowStep; i += arrowStep) {
+            const segBearing = calcBearing(coords[i][1], coords[i][0], coords[i+arrowStep][1], coords[i+arrowStep][0]);
+            layer.addLayer(L.marker([coords[i][1], coords[i][0]], {
+                icon: L.divIcon({
+                    html: `<svg width="16" height="16" viewBox="0 0 24 24" style="transform:rotate(${segBearing}deg);"><path d="M12 2 L12 18 M12 2 L8 8 M12 2 L16 8" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.7"/></svg>`,
+                    iconSize: [16, 16], iconAnchor: [8, 8], className: ''
+                }),
+                interactive: false
+            }));
+        }
+
+        // Wind arrows
+        windPoints.forEach(wp => {
+            const localWindTo = (wp.direction + 180) % 360;
+            const arrow = L.marker([wp.lat, wp.lon], {
+                icon: L.divIcon({
+                    html: `<svg width="24" height="24" viewBox="0 0 24 24" style="transform:rotate(${localWindTo}deg);filter:drop-shadow(0 0 2px rgba(0,0,0,0.5));"><path d="M12 2 L12 22 M12 22 L8 16 M12 22 L16 16" stroke="#bee3f8" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>`,
+                    iconSize: [24, 24], iconAnchor: [12, 12], className: ''
+                })
+            }).bindPopup(`Wind: ${Math.round(wp.speed)} km/h from ${['N','NE','E','SE','S','SW','W','NW'][Math.round(wp.direction / 45) % 8]}`);
+            windArrows.push(arrow);
+            layer.addLayer(arrow);
+        });
+    }
+
+    layer.addTo(map);
+    return layer;
+}
+
+function updateInfoPanel(scored, routeIndex, totalRoutes) {
+    const { coords, distKm, durMin, wind, totalClimb, totalDescent, effortScore, elevations, route } = scored;
+    const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+    const windDirLabel = dirs[Math.round(wind.direction / 45) % 8];
+
+    document.getElementById('route-dist').textContent = distKm.toFixed(1) + ' km';
+    document.getElementById('route-time').textContent = Math.round(durMin) + ' min';
+    document.getElementById('route-wind-speed').textContent = Math.round(wind.speed) + ' km/h ' + windDirLabel;
+    document.getElementById('route-climb').textContent = Math.round(totalClimb) + ' m';
+    document.getElementById('route-descent').textContent = Math.round(totalDescent) + ' m';
+
+    const finalPct = Math.round(effortScore);
+    const scoreFill = document.getElementById('score-fill');
+    scoreFill.style.width = finalPct + '%';
+    const netElev = totalDescent - totalClimb;
+    let scoreMsg;
+    if (finalPct >= 65) { scoreFill.style.background = '#48bb78'; scoreMsg = `${finalPct}% — tailwind + ${netElev > 0 ? 'downhill' : 'mostly flat'}. Best route! 🎉`; }
+    else if (finalPct >= 45) { scoreFill.style.background = '#4299e1'; scoreMsg = `${finalPct}% — mixed wind, ${Math.round(totalClimb)}m climbing.`; }
+    else if (finalPct >= 30) { scoreFill.style.background = '#ecc94b'; scoreMsg = `${finalPct}% — mostly headwind${totalClimb > 50 ? ' + uphill' : ''}.`; }
+    else { scoreFill.style.background = '#e53e3e'; scoreMsg = `${finalPct}% — headwind${totalClimb > 50 ? ' + climbing' : ''}.`; }
+    if (totalRoutes > 1) scoreMsg = `Route ${routeIndex + 1} of ${totalRoutes} — ` + scoreMsg;
+    if (totalRoutes > 1 && routeIndex === 0) scoreMsg += ' (easiest)';
+    document.getElementById('score-text').textContent = scoreMsg;
+
+    if (wind.gusts > 50) {
+        document.getElementById('score-text').textContent += ' ⚠️ Gusts ' + Math.round(wind.gusts) + ' km/h!';
+    }
+
+    drawElevation(elevations);
+
+    // Direction indicator
+    const startBearing = calcBearing(coords[0][1], coords[0][0], coords[Math.min(5, coords.length-1)][1], coords[Math.min(5, coords.length-1)][0]);
+    routeStartBearing = startBearing;
+    if (currentHeading !== null) updateCompass(currentHeading);
+    const startDirIdx = Math.round(startBearing / 45) % 8;
+    const dirNames = ['North','Northeast','East','Southeast','South','Southwest','West','Northwest'];
+    const dirArrows = ['⬆️','↗️','➡️','↘️','⬇️','↙️','⬅️','↖️'];
+    document.getElementById('dir-arrow').textContent = dirArrows[startDirIdx];
+    document.getElementById('dir-heading').textContent = 'Start heading ' + dirNames[startDirIdx];
+    const fromName = document.getElementById('input-from').value.split(',')[0];
+    const toName = document.getElementById('input-to').value.split(',')[0];
+    document.getElementById('dir-street').textContent = fromName + '  →  ' + toName;
+
+    // Turn-by-turn steps
+    const steps = route.legs[0].steps;
+    const stepsContainer = document.getElementById('route-steps');
+    stepsContainer.innerHTML = '';
+    steps.forEach(step => {
+        if (!step.name && !step.maneuver) return;
+        const maneuver = step.maneuver || {};
+        const turnType = maneuver.type || '';
+        const modifier = maneuver.modifier || '';
+        let icon = '➡️';
+        if (turnType === 'depart') icon = '🚴';
+        else if (turnType === 'arrive') icon = '🏁';
+        else if (modifier.includes('left')) icon = '⬅️';
+        else if (modifier.includes('right')) icon = '➡️';
+        else if (modifier.includes('straight')) icon = '⬆️';
+        else if (turnType === 'roundabout') icon = '🔄';
+        const stepDist = step.distance > 1000 ? (step.distance/1000).toFixed(1) + ' km' : Math.round(step.distance) + ' m';
+        const stepName = step.name || 'Unnamed road';
+        const div = document.createElement('div');
+        div.style.cssText = 'padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:0.8em;display:flex;gap:8px;align-items:center;';
+        div.innerHTML = `<span style="font-size:1.1em;">${icon}</span><span style="flex:1;color:#e2e8f0;">${stepName}</span><span style="color:#718096;white-space:nowrap;">${stepDist}</span>`;
+        stepsContainer.appendChild(div);
+    });
+
+    document.getElementById('legend-box').innerHTML = `<strong>Route:</strong><br><span style="color:#48bb78">■</span> Tailwind<br><span style="color:#4299e1">■</span> Slight tailwind<br><span style="color:#ecc94b">■</span> Slight headwind<br><span style="color:#e53e3e">■</span> Headwind${totalRoutes > 1 ? '<br><br><em>Grey = alternative<br>Click to switch</em>' : ''}<br><br>Wind: ${Math.round(wind.speed)} km/h ${windDirLabel}${wind.gusts > wind.speed + 5 ? '<br>Gusts: ' + Math.round(wind.gusts) + ' km/h' : ''}`;
+}
+
+function selectRoute(scored) {
+    // Clear all route layers
+    altRouteLayers.forEach(l => map.removeLayer(l));
+    altRouteLayers = [];
+    windArrows.forEach(a => map.removeLayer(a));
+    windArrows = [];
+
+    // Re-display all routes with the selected one as "best"
+    const selectedIdx = scoredRoutes.indexOf(scored);
+    scoredRoutes.forEach((sr, i) => {
+        const layer = displayRoute(sr, i === selectedIdx);
+        altRouteLayers.push(layer);
+    });
+
+    updateInfoPanel(scored, selectedIdx, scoredRoutes.length);
+}
+
 async function planRoute() {
     if (!startMarker && document.getElementById('input-from').value) {
         const loc = await forwardGeocode(document.getElementById('input-from').value);
@@ -661,18 +880,23 @@ async function planRoute() {
     }
     if (!startMarker || !endMarker) return;
 
-    showStatus('Planning route, checking wind & elevation...');
+    showStatus('Finding routes, checking wind & elevation...');
     document.getElementById('btn-go').disabled = true;
 
+    // Clear old
     if (routeLayer) map.removeLayer(routeLayer);
+    altRouteLayers.forEach(l => map.removeLayer(l));
+    altRouteLayers = [];
     windArrows.forEach(a => map.removeLayer(a));
     windArrows = [];
+    scoredRoutes = [];
 
     const start = startMarker.getLatLng();
     const end = endMarker.getLatLng();
 
     try {
-        const routeUrl = `https://router.project-osrm.org/route/v1/cycling/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true`;
+        // Request up to 3 alternative routes
+        const routeUrl = `https://router.project-osrm.org/route/v1/cycling/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true&alternatives=3`;
         const routeRes = await fetch(routeUrl);
         const routeData = await routeRes.json();
 
@@ -683,173 +907,34 @@ async function planRoute() {
             return;
         }
 
-        const route = routeData.routes[0];
-        const coords = route.geometry.coordinates;
-        const distKm = (route.distance / 1000).toFixed(1);
-        const durMin = Math.round(route.duration / 60);
+        const numRoutes = routeData.routes.length;
+        showStatus(`Scoring ${numRoutes} route${numRoutes > 1 ? 's' : ''} for wind & elevation...`);
 
-        // Get wind at multiple points along route
-        const windPoints = await getWindMultipoint(coords);
-        // Average wind for summary display
-        const avgSpeed = windPoints.reduce((s, p) => s + p.speed, 0) / windPoints.length;
-        const avgGusts = Math.max(...windPoints.map(p => p.gusts));
-        const avgDir = windPoints[Math.floor(windPoints.length / 2)].direction;
-        const wind = { speed: avgSpeed, direction: avgDir, gusts: avgGusts };
-
-        // Get elevation
-        const { elevations, sampled } = await getElevations(coords);
-
-        // Calculate climb and descent
-        let totalClimb = 0, totalDescent = 0;
-        for (let i = 1; i < elevations.length; i++) {
-            const diff = elevations[i] - elevations[i - 1];
-            if (diff > 0) totalClimb += diff;
-            else totalDescent += Math.abs(diff);
+        // Score all routes
+        let windCache = null;
+        for (let i = 0; i < numRoutes; i++) {
+            const scored = await scoreRoute(routeData.routes[i], null);
+            scoredRoutes.push(scored);
         }
 
-        // Colour route segments by wind
-        const leafletCoords = coords.map(c => [c[1], c[0]]);
-        let tailwindScore = 0, totalSegments = 0;
+        // Sort by effort score (highest = easiest ride)
+        scoredRoutes.sort((a, b) => b.effortScore - a.effortScore);
 
-        // Group segments by colour for efficiency
-        let segments = [];
-        let currentColor = null, currentCoords = [];
-
-        for (let i = 0; i < coords.length - 1; i++) {
-            const bearing = calcBearing(coords[i][1], coords[i][0], coords[i+1][1], coords[i+1][0]);
-            const localWind = getWindAtIndex(windPoints, i);
-            const windTo = (localWind.direction + 180) % 360;
-            const diff = angleDiff(bearing, windTo);
-            const score = Math.cos(diff * Math.PI / 180);
-            tailwindScore += score;
-            totalSegments++;
-
-            let color;
-            if (diff <= 45) color = '#48bb78';
-            else if (diff <= 90) color = '#4299e1';
-            else if (diff <= 135) color = '#ecc94b';
-            else color = '#e53e3e';
-
-            if (color !== currentColor) {
-                if (currentCoords.length > 1) segments.push({ color: currentColor, coords: [...currentCoords] });
-                currentColor = color;
-                currentCoords = [leafletCoords[i]];
-            }
-            currentCoords.push(leafletCoords[i + 1]);
-        }
-        if (currentCoords.length > 1) segments.push({ color: currentColor, coords: currentCoords });
-
-        routeLayer = L.layerGroup();
-        segments.forEach(s => {
-            routeLayer.addLayer(L.polyline(s.coords, { color: s.color, weight: 5, opacity: 0.85 }));
-        });
-        routeLayer.addTo(map);
-
-        // Wind arrows at each sample point (SVG, pointing where wind blows TO)
-        windPoints.forEach(wp => {
-            const localWindTo = (wp.direction + 180) % 360;
-            const arrow = L.marker([wp.lat, wp.lon], {
-                icon: L.divIcon({
-                    html: `<svg width="24" height="24" viewBox="0 0 24 24" style="transform:rotate(${localWindTo}deg);filter:drop-shadow(0 0 2px rgba(0,0,0,0.5));"><path d="M12 2 L12 22 M12 22 L8 16 M12 22 L16 16" stroke="#bee3f8" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>`,
-                    iconSize: [24, 24], iconAnchor: [12, 12], className: ''
-                })
-            }).bindPopup(`Wind: ${Math.round(wp.speed)} km/h from ${['N','NE','E','SE','S','SW','W','NW'][Math.round(wp.direction / 45) % 8]}`);
-            windArrows.push(arrow);
-            arrow.addTo(map);
+        // Display all routes — best one highlighted, alternatives faded
+        const allCoords = [];
+        scoredRoutes.forEach((sr, i) => {
+            const layer = displayRoute(sr, i === 0);
+            altRouteLayers.push(layer);
+            allCoords.push(...sr.coords.map(c => [c[1], c[0]]));
         });
 
-        map.fitBounds(L.latLngBounds(leafletCoords).pad(0.1));
-
-        // Score
-        const avgScore = totalSegments > 0 ? tailwindScore / totalSegments : 0;
-        const windPct = Math.round((avgScore + 1) / 2 * 100);
-
-        // Elevation bonus: net descent = easier
-        const netElev = totalDescent - totalClimb;
-        const elevBonus = Math.min(10, Math.max(-10, netElev / 20)); // +/- 10% adjustment
-        const finalPct = Math.max(0, Math.min(100, windPct + elevBonus));
-
-        const dirs = ['N','NE','E','SE','S','SW','W','NW'];
-        const windDirLabel = dirs[Math.round(wind.direction / 45) % 8];
-
-        document.getElementById('route-dist').textContent = distKm + ' km';
-        document.getElementById('route-time').textContent = durMin + ' min';
-        document.getElementById('route-wind-speed').textContent = Math.round(wind.speed) + ' km/h ' + windDirLabel;
-        document.getElementById('route-climb').textContent = Math.round(totalClimb) + ' m';
-        document.getElementById('route-descent').textContent = Math.round(totalDescent) + ' m';
-
-        const scoreFill = document.getElementById('score-fill');
-        scoreFill.style.width = finalPct + '%';
-        let scoreMsg;
-        if (finalPct >= 65) { scoreFill.style.background = '#48bb78'; scoreMsg = `${Math.round(finalPct)}% — tailwind + ${netElev > 0 ? 'downhill' : 'mostly flat'}. Great ride! 🎉`; }
-        else if (finalPct >= 45) { scoreFill.style.background = '#4299e1'; scoreMsg = `${Math.round(finalPct)}% — mixed wind, ${Math.round(totalClimb)}m climbing. Decent ride.`; }
-        else if (finalPct >= 30) { scoreFill.style.background = '#ecc94b'; scoreMsg = `${Math.round(finalPct)}% — mostly headwind${totalClimb > 50 ? ' + uphill' : ''}. Try reversing! ⇄`; }
-        else { scoreFill.style.background = '#e53e3e'; scoreMsg = `${Math.round(finalPct)}% — strong headwind${totalClimb > 50 ? ' + climbing' : ''}. Ride the other way! 💨`; }
-        document.getElementById('score-text').textContent = scoreMsg;
-
-        // Gust warning
-        if (wind.gusts > 50) {
-            document.getElementById('score-text').textContent += ' ⚠️ Gusts ' + Math.round(wind.gusts) + ' km/h — take care!';
+        // Fit map to show all routes
+        if (allCoords.length > 0) {
+            map.fitBounds(L.latLngBounds(allCoords).pad(0.1));
         }
 
-        // Draw elevation chart
-        drawElevation(elevations);
-
-        // Update legend
-        document.getElementById('legend-box').innerHTML = `<strong>Route:</strong><br><span style="color:#48bb78">■</span> Tailwind<br><span style="color:#4299e1">■</span> Slight tailwind<br><span style="color:#ecc94b">■</span> Slight headwind<br><span style="color:#e53e3e">■</span> Headwind<br><br>Wind: ${Math.round(wind.speed)} km/h ${windDirLabel}${wind.gusts > wind.speed + 5 ? '<br>Gusts: ' + Math.round(wind.gusts) + ' km/h' : ''}`;
-
-        // Direction indicator - which way to start riding
-        const startBearing = calcBearing(coords[0][1], coords[0][0], coords[Math.min(5, coords.length-1)][1], coords[Math.min(5, coords.length-1)][0]);
-        routeStartBearing = startBearing; // Store for compass comparison
-        if (currentHeading !== null) updateCompass(currentHeading); // Refresh compass hint
-        const startDirIdx = Math.round(startBearing / 45) % 8;
-        const dirNames = ['North','Northeast','East','Southeast','South','Southwest','West','Northwest'];
-        const dirArrows = ['⬆️','↗️','➡️','↘️','⬇️','↙️','⬅️','↖️'];
-        document.getElementById('dir-arrow').textContent = dirArrows[startDirIdx];
-        document.getElementById('dir-heading').textContent = 'Start heading ' + dirNames[startDirIdx];
-        const fromName = document.getElementById('input-from').value.split(',')[0];
-        const toName = document.getElementById('input-to').value.split(',')[0];
-        document.getElementById('dir-street').textContent = fromName + '  →  ' + toName;
-
-        // Direction arrows on the route (every ~500m or so)
-        const arrowStep = Math.max(1, Math.floor(coords.length / 15));
-        for (let i = 0; i < coords.length - arrowStep; i += arrowStep) {
-            const segBearing = calcBearing(coords[i][1], coords[i][0], coords[i+arrowStep][1], coords[i+arrowStep][0]);
-            const dirMarker = L.marker([coords[i][1], coords[i][0]], {
-                icon: L.divIcon({
-                    html: `<svg width="16" height="16" viewBox="0 0 24 24" style="transform:rotate(${segBearing}deg);"><path d="M12 2 L12 18 M12 2 L8 8 M12 2 L16 8" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.7"/></svg>`,
-                    iconSize: [16, 16], iconAnchor: [8, 8], className: ''
-                }),
-                interactive: false
-            });
-            routeLayer.addLayer(dirMarker);
-        }
-
-        // Turn-by-turn steps from OSRM
-        const steps = route.legs[0].steps;
-        const stepsContainer = document.getElementById('route-steps');
-        stepsContainer.innerHTML = '';
-        steps.forEach((step, i) => {
-            if (!step.name && !step.maneuver) return;
-            const maneuver = step.maneuver || {};
-            const turnType = maneuver.type || '';
-            const modifier = maneuver.modifier || '';
-            let icon = '➡️';
-            if (turnType === 'depart') icon = '🚴';
-            else if (turnType === 'arrive') icon = '🏁';
-            else if (modifier.includes('left')) icon = '⬅️';
-            else if (modifier.includes('right')) icon = '➡️';
-            else if (modifier.includes('straight')) icon = '⬆️';
-            else if (turnType === 'roundabout') icon = '🔄';
-
-            const stepDist = step.distance > 1000 ? (step.distance/1000).toFixed(1) + ' km' : Math.round(step.distance) + ' m';
-            const stepName = step.name || 'Unnamed road';
-
-            const div = document.createElement('div');
-            div.style.cssText = 'padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:0.8em;display:flex;gap:8px;align-items:center;';
-            div.innerHTML = `<span style="font-size:1.1em;">${icon}</span><span style="flex:1;color:#e2e8f0;">${stepName}</span><span style="color:#718096;white-space:nowrap;">${stepDist}</span>`;
-            stepsContainer.appendChild(div);
-        });
+        // Show info for best route
+        updateInfoPanel(scoredRoutes[0], 0, scoredRoutes.length);
 
         document.getElementById('info-panel').style.display = 'block';
         hideStatus();
