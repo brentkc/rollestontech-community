@@ -4,8 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0c1929">
-    <title>Wind-Assisted Cycling Planner | Rolleston Community</title>
-    <meta name="description" content="Plan your cycling route with the wind at your back. Live wind data helps you find the best tailwind route in Canterbury, New Zealand.">
+    <title>Wind Rider — Cycling Route Planner | Rolleston Community</title>
+    <meta name="description" content="Plan your cycling route with the wind at your back. Live wind and elevation data for Canterbury, New Zealand.">
+    <meta property="og:title" content="Wind Rider — Cycling Route Planner">
+    <meta property="og:description" content="Find the best cycling route using live wind and elevation data. A free tool by Rolleston Tech Solutions.">
+    <meta property="og:image" content="https://rollestontech.co.nz/wp-content/uploads/2023/07/cropped-original-logo-1.png">
     <link rel="icon" href="https://rollestontech.co.nz/wp-content/uploads/2023/07/cropped-original-logo-symbol.png?w=32" sizes="32x32">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
@@ -14,47 +17,42 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #0c1929;
             color: #fff;
-            min-height: 100vh;
+            height: 100dvh;
             display: flex;
             flex-direction: column;
         }
 
-        /* Top bar */
         .top-bar {
             background: linear-gradient(135deg, #1a365d, #2c5282);
-            padding: 12px 20px;
+            padding: 10px 20px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 15px;
-            flex-wrap: wrap;
+            gap: 10px;
             border-bottom: 2px solid #4299e1;
             z-index: 1000;
         }
-        .top-bar h1 {
-            font-size: 1.2em;
-            font-weight: 600;
-            white-space: nowrap;
-        }
+        .top-bar h1 { font-size: 1.15em; font-weight: 600; white-space: nowrap; }
         .top-bar h1 span { color: #90cdf4; font-weight: 300; }
-        .top-bar-links {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-        }
-        .top-bar-links a {
-            color: #90cdf4;
-            text-decoration: none;
-            font-size: 0.85em;
-        }
+        .top-bar-links { display: flex; gap: 12px; align-items: center; }
+        .top-bar-links a { color: #90cdf4; text-decoration: none; font-size: 0.8em; }
         .top-bar-links a:hover { color: #fff; }
 
-        /* Controls panel */
+        .intro {
+            background: rgba(26, 32, 44, 0.95);
+            padding: 8px 20px;
+            text-align: center;
+            font-size: 0.82em;
+            color: #90cdf4;
+            border-bottom: 1px solid #2d3748;
+            z-index: 999;
+        }
+
         .controls {
             background: rgba(26, 32, 44, 0.95);
-            padding: 15px 20px;
+            padding: 10px 15px;
             display: flex;
-            gap: 12px;
+            gap: 8px;
             align-items: flex-end;
             flex-wrap: wrap;
             border-bottom: 1px solid #2d3748;
@@ -63,193 +61,161 @@
         .control-group {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 3px;
             flex: 1;
-            min-width: 180px;
+            min-width: 150px;
+            position: relative;
         }
         .control-group label {
-            font-size: 0.75em;
+            font-size: 0.7em;
             color: #90cdf4;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
-        .control-group input, .control-group select {
+        .control-group input {
             background: #2d3748;
             border: 1px solid #4a5568;
             color: #fff;
-            padding: 10px 12px;
+            padding: 9px 10px;
             border-radius: 8px;
-            font-size: 0.9em;
+            font-size: 0.85em;
             outline: none;
         }
-        .control-group input:focus, .control-group select:focus {
-            border-color: #4299e1;
-        }
-        .control-group { position: relative; }
+        .control-group input:focus { border-color: #4299e1; }
         .autocomplete-list {
             position: absolute;
             top: 100%;
-            left: 0;
-            right: 0;
+            left: 0; right: 0;
             background: #2d3748;
             border: 1px solid #4a5568;
             border-top: none;
             border-radius: 0 0 8px 8px;
-            max-height: 200px;
+            max-height: 180px;
             overflow-y: auto;
             z-index: 2000;
             display: none;
         }
-        .autocomplete-list .ac-item {
-            padding: 10px 12px;
-            font-size: 0.85em;
+        .ac-item {
+            padding: 9px 10px;
+            font-size: 0.82em;
             color: #e2e8f0;
             cursor: pointer;
             border-bottom: 1px solid #4a5568;
         }
-        .autocomplete-list .ac-item:last-child { border-bottom: none; }
-        .autocomplete-list .ac-item:hover {
-            background: #4a5568;
-        }
-        .autocomplete-list .ac-item .ac-secondary {
-            color: #718096;
-            font-size: 0.85em;
-        }
-        .btn-plan {
-            background: #48bb78;
-            color: #fff;
-            border: none;
-            padding: 10px 24px;
-            border-radius: 8px;
-            font-size: 0.9em;
+        .ac-item:last-child { border-bottom: none; }
+        .ac-item:hover { background: #4a5568; }
+        .ac-secondary { color: #a0aec0; font-size: 0.85em; }
+
+        .btn { border: none; padding: 9px 16px; border-radius: 8px; font-size: 0.85em; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background 0.2s; }
+        .btn-go { background: #48bb78; color: #fff; }
+        .btn-go:hover { background: #38a169; }
+        .btn-go:disabled { background: #4a5568; cursor: not-allowed; }
+        .btn-loc { background: #4299e1; color: #fff; }
+        .btn-loc:hover { background: #3182ce; }
+        .btn-rev { background: #805ad5; color: #fff; }
+        .btn-rev:hover { background: #6b46c1; }
+        .btn-clear { background: #2d3748; color: #a0aec0; border: 1px solid #4a5568; }
+        .btn-clear:hover { background: #4a5568; color: #fff; }
+
+        /* Click mode indicator */
+        .mode-indicator {
+            background: #2d3748;
+            text-align: center;
+            padding: 6px;
+            font-size: 0.8em;
             font-weight: 600;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: background 0.2s;
+            z-index: 998;
         }
-        .btn-plan:hover { background: #38a169; }
-        .btn-plan:disabled {
-            background: #4a5568;
-            cursor: not-allowed;
-        }
-        .btn-locate {
-            background: #4299e1;
-            color: #fff;
-            border: none;
-            padding: 10px 14px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: background 0.2s;
-        }
-        .btn-locate:hover { background: #3182ce; }
+        .mode-indicator.start { color: #48bb78; }
+        .mode-indicator.end { color: #e53e3e; }
+        .mode-indicator.done { color: #90cdf4; }
 
         /* Map */
-        #map {
-            flex: 1;
-            min-height: 400px;
+        #map { flex: 1; min-height: 250px; }
+
+        /* Compass */
+        .compass {
+            position: absolute;
+            top: 70px;
+            left: 10px;
+            width: 50px;
+            height: 50px;
+            background: rgba(26, 32, 44, 0.85);
+            border-radius: 50%;
+            border: 2px solid #4a5568;
+            z-index: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .compass-arrow {
+            font-size: 24px;
+            transition: transform 0.3s ease;
+        }
+        .compass-label {
+            position: absolute;
+            bottom: -16px;
+            font-size: 0.65em;
+            color: #90cdf4;
+            white-space: nowrap;
         }
 
-        /* Info panel overlay */
+        /* Info panel */
         .info-panel {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            right: 20px;
-            max-width: 500px;
             background: rgba(26, 32, 44, 0.95);
-            border-radius: 16px;
-            padding: 20px;
-            border: 1px solid #2d3748;
+            border-top: 2px solid #2d3748;
+            padding: 15px 20px;
             z-index: 800;
             display: none;
         }
         .info-panel h3 {
             color: #90cdf4;
-            font-size: 0.9em;
+            font-size: 0.8em;
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
         .info-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 12px;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
         }
         .info-item { text-align: center; }
-        .info-item .info-val {
-            font-size: 1.5em;
-            font-weight: 600;
-        }
-        .info-item .info-lbl {
-            font-size: 0.7em;
-            color: #90cdf4;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-top: 2px;
-        }
-        .wind-score {
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid #2d3748;
-            text-align: center;
-        }
-        .wind-score .score-bar {
-            width: 100%;
-            height: 8px;
-            background: #2d3748;
-            border-radius: 4px;
-            margin: 8px 0;
-            overflow: hidden;
-        }
-        .wind-score .score-fill {
-            height: 100%;
-            border-radius: 4px;
-            transition: width 0.5s;
-        }
-        .wind-score .score-text {
-            font-size: 0.85em;
-            color: #a0aec0;
-        }
-        .close-panel {
-            position: absolute;
-            top: 12px;
-            right: 15px;
-            background: none;
-            border: none;
-            color: #718096;
-            font-size: 1.2em;
-            cursor: pointer;
-        }
-        .close-panel:hover { color: #fff; }
+        .info-item .info-val { font-size: 1.2em; font-weight: 600; }
+        .info-item .info-lbl { font-size: 0.65em; color: #90cdf4; text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
 
-        /* Wind legend on map */
+        .score-row {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .score-bar { flex: 1; height: 8px; background: #2d3748; border-radius: 4px; overflow: hidden; }
+        .score-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+        .score-text { font-size: 0.8em; color: #a0aec0; flex: 2; }
+
+        /* Elevation chart */
+        .elevation-chart {
+            margin-top: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 10px;
+        }
+        .elevation-chart h4 { font-size: 0.7em; color: #90cdf4; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+        .elev-canvas { width: 100%; height: 60px; display: block; }
+
+        /* Legend */
         .wind-legend {
             background: rgba(26, 32, 44, 0.9);
-            padding: 10px 14px;
+            padding: 8px 12px;
             border-radius: 8px;
-            font-size: 0.8em;
+            font-size: 0.75em;
             color: #e2e8f0;
-            line-height: 1.6;
+            line-height: 1.5;
         }
         .wind-legend strong { color: #90cdf4; }
 
-        /* Status message */
-        .status-msg {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(26, 32, 44, 0.9);
-            padding: 15px 25px;
-            border-radius: 12px;
-            z-index: 800;
-            display: none;
-            text-align: center;
-            color: #90cdf4;
-        }
-
-        /* Ad banner */
+        /* Map ad */
         .map-ad {
             position: absolute;
             top: 10px;
@@ -257,182 +223,255 @@
             background: rgba(26, 54, 93, 0.9);
             border: 1px solid #4299e1;
             border-radius: 10px;
-            padding: 10px 15px;
+            padding: 8px 12px;
             z-index: 800;
-            max-width: 220px;
+            max-width: 200px;
         }
-        .map-ad a {
-            color: #63b3ed;
-            text-decoration: none;
-            font-size: 0.8em;
-            font-weight: 500;
-        }
+        .map-ad a { color: #63b3ed; text-decoration: none; font-size: 0.75em; font-weight: 500; }
         .map-ad a:hover { color: #fff; }
-        .map-ad p {
-            font-size: 0.7em;
+        .map-ad p { font-size: 0.65em; color: #90cdf4; margin-top: 2px; }
+
+        .status-msg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(26, 32, 44, 0.9);
+            padding: 12px 20px;
+            border-radius: 10px;
+            z-index: 900;
+            display: none;
+            text-align: center;
             color: #90cdf4;
-            margin-top: 3px;
+            font-size: 0.9em;
         }
 
         @media (max-width: 600px) {
-            .controls { padding: 10px; gap: 8px; }
-            .control-group { min-width: 140px; }
-            .info-grid { grid-template-columns: repeat(2, 1fr); }
-            .map-ad { display: none; }
             .top-bar h1 { font-size: 1em; }
+            .control-group { min-width: 120px; }
+            .info-grid { grid-template-columns: repeat(3, 1fr); }
+            .map-ad { display: none; }
+            .compass { width: 42px; height: 42px; top: 60px; }
+            .compass-arrow { font-size: 20px; }
         }
     </style>
 </head>
 <body>
 
 <div class="top-bar">
-    <h1>🚴 Wind Rider <span>Cycling Route Planner</span></h1>
+    <h1>🚴 Wind Rider <span>Planner</span></h1>
     <div class="top-bar-links">
         <a href="index.html">Weather</a>
         <a href="https://rollestontech.co.nz" target="_blank" rel="noopener">Rolleston Tech Solutions</a>
     </div>
 </div>
 
+<div class="intro">
+    Plan your ride with the wind at your back. See which parts of your route have tailwind, headwind, and hills.
+</div>
+
 <div class="controls">
-    <div class="control-group" style="flex: 0; min-width: auto;">
+    <div class="control-group" style="flex:0;min-width:auto;">
         <label>&nbsp;</label>
-        <button class="btn-locate" onclick="locateMe()" title="Use my location">📍 My Location</button>
+        <button class="btn btn-loc" onclick="locateMe()" title="Use my location">📍</button>
     </div>
     <div class="control-group">
         <label>From</label>
-        <input type="text" id="input-from" placeholder="Click map or type address" autocomplete="off" />
+        <input type="text" id="input-from" placeholder="Type address or click map" autocomplete="off" />
         <div class="autocomplete-list" id="ac-from"></div>
     </div>
     <div class="control-group">
         <label>To</label>
-        <input type="text" id="input-to" placeholder="Click map or type address" autocomplete="off" />
+        <input type="text" id="input-to" placeholder="Type address or click map" autocomplete="off" />
         <div class="autocomplete-list" id="ac-to"></div>
     </div>
-    <div class="control-group" style="flex: 0; min-width: auto;">
+    <div class="control-group" style="flex:0;min-width:auto;">
         <label>&nbsp;</label>
-        <button class="btn-plan" id="btn-go" onclick="planRoute()" disabled>Plan Route</button>
+        <div style="display:flex;gap:5px;">
+            <button class="btn btn-rev" onclick="reverseRoute()" title="Swap start and end">⇄</button>
+            <button class="btn btn-go" id="btn-go" onclick="planRoute()" disabled>Go</button>
+            <button class="btn btn-clear" onclick="clearAll()">✕</button>
+        </div>
     </div>
 </div>
 
-<div style="position: relative; flex: 1; display: flex; flex-direction: column;">
+<div class="mode-indicator start" id="mode-indicator">👆 Click the map to set your START point</div>
+
+<div style="position:relative;flex:1;display:flex;flex-direction:column;">
     <div id="map"></div>
-
     <div class="status-msg" id="status-msg"></div>
+    <div class="compass" id="compass">
+        <div class="compass-arrow" id="compass-arrow">➤</div>
+        <div class="compass-label" id="compass-label">--</div>
+    </div>
+    <div class="map-ad">
+        <a href="https://rollestontech.co.nz" target="_blank" rel="noopener">🔧 Rolleston Tech Solutions</a>
+        <p>Computer repairs &amp; IT support</p>
+    </div>
+</div>
 
-    <div class="info-panel" id="info-panel">
-        <button class="close-panel" onclick="document.getElementById('info-panel').style.display='none'">✕</button>
-        <h3>Route Summary</h3>
-        <div class="info-grid">
-            <div class="info-item">
-                <div class="info-val" id="route-dist">--</div>
-                <div class="info-lbl">Distance</div>
-            </div>
-            <div class="info-item">
-                <div class="info-val" id="route-time">--</div>
-                <div class="info-lbl">Est. Time</div>
-            </div>
-            <div class="info-item">
-                <div class="info-val" id="route-wind-speed">--</div>
-                <div class="info-lbl">Wind</div>
-            </div>
-            <div class="info-item">
-                <div class="info-val" id="route-wind-dir">--</div>
-                <div class="info-lbl">Direction</div>
-            </div>
+<div class="info-panel" id="info-panel">
+    <h3>Route Summary</h3>
+    <div class="info-grid">
+        <div class="info-item">
+            <div class="info-val" id="route-dist">--</div>
+            <div class="info-lbl">Distance</div>
         </div>
-        <div class="wind-score">
-            <div class="score-bar"><div class="score-fill" id="score-fill"></div></div>
-            <div class="score-text" id="score-text">Calculating wind advantage...</div>
+        <div class="info-item">
+            <div class="info-val" id="route-time">--</div>
+            <div class="info-lbl">Est. Time</div>
+        </div>
+        <div class="info-item">
+            <div class="info-val" id="route-wind-speed">--</div>
+            <div class="info-lbl">Wind</div>
+        </div>
+        <div class="info-item">
+            <div class="info-val" id="route-climb">--</div>
+            <div class="info-lbl">Climb</div>
+        </div>
+        <div class="info-item">
+            <div class="info-val" id="route-descent">--</div>
+            <div class="info-lbl">Descent</div>
         </div>
     </div>
-
-    <div class="map-ad">
-        <a href="https://rollestontech.co.nz">🔧 Rolleston Tech Solutions</a>
-        <p>Computer repairs &amp; IT support in Rolleston</p>
+    <div class="score-row">
+        <div class="score-bar"><div class="score-fill" id="score-fill"></div></div>
+        <div class="score-text" id="score-text">--</div>
+    </div>
+    <div class="elevation-chart">
+        <h4>Elevation Profile</h4>
+        <canvas class="elev-canvas" id="elev-canvas"></canvas>
     </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// === MAP SETUP ===
+// === MAP ===
 const map = L.map('map', { zoomControl: true }).setView([-43.591, 172.379], 13);
-
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
     maxZoom: 19
 }).addTo(map);
 
-// Wind legend
 const legend = L.control({ position: 'bottomright' });
 legend.onAdd = function() {
     const div = L.DomUtil.create('div', 'wind-legend');
-    div.innerHTML = '<strong>How to use:</strong><br>1. Click 📍 or click map to set <b>start</b><br>2. Click map again to set <b>destination</b><br>3. Hit <b>Plan Route</b>';
+    div.id = 'legend-box';
+    div.innerHTML = '<strong>Colours:</strong><br><span style="color:#48bb78">■</span> Tailwind<br><span style="color:#4299e1">■</span> Slight tailwind<br><span style="color:#ecc94b">■</span> Slight headwind<br><span style="color:#e53e3e">■</span> Headwind';
     return div;
 };
 legend.addTo(map);
 
 // === STATE ===
-let startMarker = null;
-let endMarker = null;
-let routeLayer = null;
-let windArrows = [];
-let clickMode = 'start'; // 'start' or 'end'
+let startMarker = null, endMarker = null, routeLayer = null, windArrows = [];
+let clickMode = 'start';
 
-const startIcon = L.divIcon({
-    html: '<div style="background:#48bb78;width:14px;height:14px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 6px rgba(0,0,0,0.4);"></div>',
-    iconSize: [14, 14], iconAnchor: [7, 7], className: ''
+const mkIcon = (color) => L.divIcon({
+    html: `<div style="background:${color};width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`,
+    iconSize: [16, 16], iconAnchor: [8, 8], className: ''
 });
-const endIcon = L.divIcon({
-    html: '<div style="background:#e53e3e;width:14px;height:14px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 6px rgba(0,0,0,0.4);"></div>',
-    iconSize: [14, 14], iconAnchor: [7, 7], className: ''
-});
+const startIcon = mkIcon('#48bb78');
+const endIcon = mkIcon('#e53e3e');
+
+function updateModeIndicator() {
+    const el = document.getElementById('mode-indicator');
+    if (!startMarker) {
+        el.textContent = '👆 Click the map to set your START point';
+        el.className = 'mode-indicator start';
+    } else if (!endMarker) {
+        el.textContent = '👆 Now click the map to set your DESTINATION';
+        el.className = 'mode-indicator end';
+    } else {
+        el.textContent = '✅ Ready — hit Go to plan your route';
+        el.className = 'mode-indicator done';
+    }
+    document.getElementById('btn-go').disabled = !(startMarker && endMarker);
+}
 
 // === MAP CLICK ===
 map.on('click', async function(e) {
     const latlng = e.latlng;
     const name = await reverseGeocode(latlng.lat, latlng.lng);
-
     if (clickMode === 'start') {
         if (startMarker) map.removeLayer(startMarker);
-        startMarker = L.marker(latlng, { icon: startIcon }).addTo(map).bindPopup('Start: ' + name).openPopup();
+        startMarker = L.marker(latlng, { icon: startIcon, draggable: true }).addTo(map).bindPopup('Start: ' + name);
+        startMarker.on('dragend', async () => {
+            const p = startMarker.getLatLng();
+            document.getElementById('input-from').value = await reverseGeocode(p.lat, p.lng);
+        });
         document.getElementById('input-from').value = name;
         clickMode = 'end';
     } else {
         if (endMarker) map.removeLayer(endMarker);
-        endMarker = L.marker(latlng, { icon: endIcon }).addTo(map).bindPopup('Destination: ' + name).openPopup();
+        endMarker = L.marker(latlng, { icon: endIcon, draggable: true }).addTo(map).bindPopup('Destination: ' + name);
+        endMarker.on('dragend', async () => {
+            const p = endMarker.getLatLng();
+            document.getElementById('input-to').value = await reverseGeocode(p.lat, p.lng);
+        });
         document.getElementById('input-to').value = name;
         clickMode = 'start';
     }
-    updatePlanButton();
+    updateModeIndicator();
 });
-
-function updatePlanButton() {
-    document.getElementById('btn-go').disabled = !(startMarker && endMarker);
-}
 
 // === LOCATE ME ===
 function locateMe() {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+        showStatus('GPS not available on this device');
+        setTimeout(hideStatus, 2000);
+        return;
+    }
     showStatus('Finding your location...');
     navigator.geolocation.getCurrentPosition(async (pos) => {
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
-        const latlng = L.latLng(lat, lon);
-        const name = await reverseGeocode(lat, lon);
-
+        const latlng = L.latLng(pos.coords.latitude, pos.coords.longitude);
+        const name = await reverseGeocode(latlng.lat, latlng.lng);
         if (startMarker) map.removeLayer(startMarker);
-        startMarker = L.marker(latlng, { icon: startIcon }).addTo(map).bindPopup('Start: ' + name).openPopup();
+        startMarker = L.marker(latlng, { icon: startIcon, draggable: true }).addTo(map).bindPopup('Start: ' + name);
+        startMarker.on('dragend', async () => {
+            const p = startMarker.getLatLng();
+            document.getElementById('input-from').value = await reverseGeocode(p.lat, p.lng);
+        });
         document.getElementById('input-from').value = name;
         clickMode = 'end';
         map.setView(latlng, 14);
         hideStatus();
-        updatePlanButton();
+        updateModeIndicator();
     }, () => {
-        hideStatus();
+        showStatus('Could not get location. Type an address or click the map.');
+        setTimeout(hideStatus, 3000);
     }, { enableHighAccuracy: true, timeout: 8000 });
 }
 
-// === REVERSE GEOCODE ===
+// === REVERSE / CLEAR ===
+function reverseRoute() {
+    if (!startMarker || !endMarker) return;
+    const sll = startMarker.getLatLng();
+    const ell = endMarker.getLatLng();
+    const sName = document.getElementById('input-from').value;
+    const eName = document.getElementById('input-to').value;
+    // Swap
+    startMarker.setLatLng(ell);
+    endMarker.setLatLng(sll);
+    document.getElementById('input-from').value = eName;
+    document.getElementById('input-to').value = sName;
+    // Re-plan if route exists
+    if (routeLayer) planRoute();
+}
+
+function clearAll() {
+    if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
+    if (endMarker) { map.removeLayer(endMarker); endMarker = null; }
+    if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+    windArrows.forEach(a => map.removeLayer(a));
+    windArrows = [];
+    document.getElementById('input-from').value = '';
+    document.getElementById('input-to').value = '';
+    document.getElementById('info-panel').style.display = 'none';
+    clickMode = 'start';
+    updateModeIndicator();
+}
+
+// === GEOCODING ===
 async function reverseGeocode(lat, lon) {
     try {
         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=16&accept-language=en`);
@@ -447,65 +486,65 @@ async function reverseGeocode(lat, lon) {
     return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
 }
 
-// === FORWARD GEOCODE ===
 async function forwardGeocode(query) {
     try {
         const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&countrycodes=nz&accept-language=en`);
         const data = await res.json();
-        if (data && data.length > 0) {
-            return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), name: data[0].display_name.split(',').slice(0, 2).join(',') };
-        }
+        if (data && data.length > 0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), name: data[0].display_name.split(',').slice(0, 2).join(',').trim() };
     } catch(e) {}
     return null;
 }
 
-// === GET WIND DATA ===
+// === WIND ===
 async function getWind(lat, lon) {
     try {
         const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&timezone=auto`);
         const data = await res.json();
-        return {
-            speed: data.current.wind_speed_10m,
-            direction: data.current.wind_direction_10m,
-            gusts: data.current.wind_gusts_10m
-        };
+        return { speed: data.current.wind_speed_10m, direction: data.current.wind_direction_10m, gusts: data.current.wind_gusts_10m };
+    } catch(e) { return { speed: 0, direction: 0, gusts: 0 }; }
+}
+
+// === ELEVATION ===
+async function getElevations(coords) {
+    // Sample up to 50 points along the route
+    const step = Math.max(1, Math.floor(coords.length / 50));
+    const sampled = [];
+    for (let i = 0; i < coords.length; i += step) sampled.push(coords[i]);
+    if (sampled[sampled.length - 1] !== coords[coords.length - 1]) sampled.push(coords[coords.length - 1]);
+
+    const lats = sampled.map(c => c[1]).join(',');
+    const lons = sampled.map(c => c[0]).join(',');
+
+    try {
+        const res = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`);
+        const data = await res.json();
+        return { elevations: data.elevation, sampled };
     } catch(e) {
-        return { speed: 0, direction: 0, gusts: 0 };
+        return { elevations: sampled.map(() => 0), sampled };
     }
 }
 
 // === ROUTE PLANNING ===
 async function planRoute() {
-    // If user typed addresses, geocode them
-    if (!startMarker) {
-        const fromText = document.getElementById('input-from').value;
-        if (fromText) {
-            const loc = await forwardGeocode(fromText);
-            if (loc) {
-                const latlng = L.latLng(loc.lat, loc.lon);
-                startMarker = L.marker(latlng, { icon: startIcon }).addTo(map);
-                document.getElementById('input-from').value = loc.name;
-            }
+    if (!startMarker && document.getElementById('input-from').value) {
+        const loc = await forwardGeocode(document.getElementById('input-from').value);
+        if (loc) {
+            startMarker = L.marker([loc.lat, loc.lon], { icon: startIcon, draggable: true }).addTo(map);
+            document.getElementById('input-from').value = loc.name;
         }
     }
-    if (!endMarker) {
-        const toText = document.getElementById('input-to').value;
-        if (toText) {
-            const loc = await forwardGeocode(toText);
-            if (loc) {
-                const latlng = L.latLng(loc.lat, loc.lon);
-                endMarker = L.marker(latlng, { icon: endIcon }).addTo(map);
-                document.getElementById('input-to').value = loc.name;
-            }
+    if (!endMarker && document.getElementById('input-to').value) {
+        const loc = await forwardGeocode(document.getElementById('input-to').value);
+        if (loc) {
+            endMarker = L.marker([loc.lat, loc.lon], { icon: endIcon, draggable: true }).addTo(map);
+            document.getElementById('input-to').value = loc.name;
         }
     }
-
     if (!startMarker || !endMarker) return;
 
-    showStatus('Planning route & checking wind...');
+    showStatus('Planning route, checking wind & elevation...');
     document.getElementById('btn-go').disabled = true;
 
-    // Clear old route
     if (routeLayer) map.removeLayer(routeLayer);
     windArrows.forEach(a => map.removeLayer(a));
     windArrows = [];
@@ -514,7 +553,6 @@ async function planRoute() {
     const end = endMarker.getLatLng();
 
     try {
-        // Get cycling route from OSRM (free, no API key)
         const routeUrl = `https://router.project-osrm.org/route/v1/cycling/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true`;
         const routeRes = await fetch(routeUrl);
         const routeData = await routeRes.json();
@@ -527,120 +565,220 @@ async function planRoute() {
         }
 
         const route = routeData.routes[0];
-        const coords = route.geometry.coordinates; // [lng, lat] pairs
+        const coords = route.geometry.coordinates;
         const distKm = (route.distance / 1000).toFixed(1);
         const durMin = Math.round(route.duration / 60);
 
-        // Get wind at midpoint of route
+        // Get wind at midpoint
         const midIdx = Math.floor(coords.length / 2);
-        const midLat = coords[midIdx][1];
-        const midLon = coords[midIdx][0];
-        const wind = await getWind(midLat, midLon);
+        const wind = await getWind(coords[midIdx][1], coords[midIdx][0]);
 
-        // Calculate wind score for each segment
+        // Get elevation
+        const { elevations, sampled } = await getElevations(coords);
+
+        // Calculate climb and descent
+        let totalClimb = 0, totalDescent = 0;
+        for (let i = 1; i < elevations.length; i++) {
+            const diff = elevations[i] - elevations[i - 1];
+            if (diff > 0) totalClimb += diff;
+            else totalDescent += Math.abs(diff);
+        }
+
+        // Colour route segments by wind
         const leafletCoords = coords.map(c => [c[1], c[0]]);
-        let tailwindScore = 0;
-        let totalSegments = 0;
+        let tailwindScore = 0, totalSegments = 0;
 
-        // Color segments based on wind alignment
-        const segmentColors = [];
+        // Group segments by colour for efficiency
+        let segments = [];
+        let currentColor = null, currentCoords = [];
+
         for (let i = 0; i < coords.length - 1; i++) {
             const bearing = calcBearing(coords[i][1], coords[i][0], coords[i+1][1], coords[i+1][0]);
-            const windFrom = wind.direction; // wind comes FROM this direction
-            const windTo = (windFrom + 180) % 360; // wind blows TO this direction
+            const windTo = (wind.direction + 180) % 360;
             const diff = angleDiff(bearing, windTo);
-
-            // diff < 90 = tailwind, > 90 = headwind
             const score = Math.cos(diff * Math.PI / 180);
             tailwindScore += score;
             totalSegments++;
 
-            if (diff <= 45) segmentColors.push('#48bb78'); // strong tailwind - green
-            else if (diff <= 90) segmentColors.push('#4299e1'); // slight tailwind - blue
-            else if (diff <= 135) segmentColors.push('#ecc94b'); // slight headwind - yellow
-            else segmentColors.push('#e53e3e'); // strong headwind - red
-        }
+            let color;
+            if (diff <= 45) color = '#48bb78';
+            else if (diff <= 90) color = '#4299e1';
+            else if (diff <= 135) color = '#ecc94b';
+            else color = '#e53e3e';
 
-        // Draw coloured route segments
-        routeLayer = L.layerGroup();
-        for (let i = 0; i < leafletCoords.length - 1; i++) {
-            const seg = L.polyline([leafletCoords[i], leafletCoords[i+1]], {
-                color: segmentColors[i] || '#4299e1',
-                weight: 5,
-                opacity: 0.85
-            });
-            routeLayer.addLayer(seg);
+            if (color !== currentColor) {
+                if (currentCoords.length > 1) segments.push({ color: currentColor, coords: [...currentCoords] });
+                currentColor = color;
+                currentCoords = [leafletCoords[i]];
+            }
+            currentCoords.push(leafletCoords[i + 1]);
         }
+        if (currentCoords.length > 1) segments.push({ color: currentColor, coords: currentCoords });
+
+        routeLayer = L.layerGroup();
+        segments.forEach(s => {
+            routeLayer.addLayer(L.polyline(s.coords, { color: s.color, weight: 5, opacity: 0.85 }));
+        });
         routeLayer.addTo(map);
 
-        // Add wind arrows along route
+        // Wind arrows (SVG, pointing where wind blows TO)
         const arrowInterval = Math.max(1, Math.floor(coords.length / 8));
+        const windTo = (wind.direction + 180) % 360;
         for (let i = 0; i < coords.length; i += arrowInterval) {
-            const lat = coords[i][1];
-            const lon = coords[i][0];
-            const rotation = wind.direction; // arrow points in direction wind comes from
-            const arrow = L.marker([lat, lon], {
+            const arrow = L.marker([coords[i][1], coords[i][0]], {
                 icon: L.divIcon({
-                    html: `<div style="transform:rotate(${rotation}deg);font-size:18px;opacity:0.7;filter:drop-shadow(0 0 2px rgba(0,0,0,0.5));">⬇️</div>`,
-                    iconSize: [20, 20], iconAnchor: [10, 10], className: ''
+                    html: `<svg width="22" height="22" viewBox="0 0 24 24" style="transform:rotate(${windTo}deg);filter:drop-shadow(0 0 2px rgba(0,0,0,0.5));"><path d="M12 2 L12 22 M12 22 L8 16 M12 22 L16 16" stroke="#bee3f8" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>`,
+                    iconSize: [22, 22], iconAnchor: [11, 11], className: ''
                 })
             });
             windArrows.push(arrow);
             arrow.addTo(map);
         }
 
-        // Fit map to route
         map.fitBounds(L.latLngBounds(leafletCoords).pad(0.1));
 
-        // Calculate overall wind score (0-100)
+        // Score
         const avgScore = totalSegments > 0 ? tailwindScore / totalSegments : 0;
-        const windPct = Math.round((avgScore + 1) / 2 * 100); // normalize -1..1 to 0..100
+        const windPct = Math.round((avgScore + 1) / 2 * 100);
 
-        // Wind direction label
+        // Elevation bonus: net descent = easier
+        const netElev = totalDescent - totalClimb;
+        const elevBonus = Math.min(10, Math.max(-10, netElev / 20)); // +/- 10% adjustment
+        const finalPct = Math.max(0, Math.min(100, windPct + elevBonus));
+
         const dirs = ['N','NE','E','SE','S','SW','W','NW'];
         const windDirLabel = dirs[Math.round(wind.direction / 45) % 8];
 
-        // Update info panel
         document.getElementById('route-dist').textContent = distKm + ' km';
         document.getElementById('route-time').textContent = durMin + ' min';
-        document.getElementById('route-wind-speed').textContent = Math.round(wind.speed) + ' km/h';
-        document.getElementById('route-wind-dir').textContent = windDirLabel;
+        document.getElementById('route-wind-speed').textContent = Math.round(wind.speed) + ' km/h ' + windDirLabel;
+        document.getElementById('route-climb').textContent = Math.round(totalClimb) + ' m';
+        document.getElementById('route-descent').textContent = Math.round(totalDescent) + ' m';
 
         const scoreFill = document.getElementById('score-fill');
-        scoreFill.style.width = windPct + '%';
-        if (windPct >= 60) {
-            scoreFill.style.background = '#48bb78';
-            document.getElementById('score-text').textContent = `${windPct}% tailwind advantage — great ride! 🎉`;
-        } else if (windPct >= 45) {
-            scoreFill.style.background = '#4299e1';
-            document.getElementById('score-text').textContent = `${windPct}% — mixed conditions, some sections with you, some against`;
-        } else if (windPct >= 30) {
-            scoreFill.style.background = '#ecc94b';
-            document.getElementById('score-text').textContent = `${windPct}% — mostly headwind. Consider reversing your route!`;
-        } else {
-            scoreFill.style.background = '#e53e3e';
-            document.getElementById('score-text').textContent = `${windPct}% — strong headwind. Ride the other way if possible! 💨`;
+        scoreFill.style.width = finalPct + '%';
+        let scoreMsg;
+        if (finalPct >= 65) { scoreFill.style.background = '#48bb78'; scoreMsg = `${Math.round(finalPct)}% — tailwind + ${netElev > 0 ? 'downhill' : 'mostly flat'}. Great ride! 🎉`; }
+        else if (finalPct >= 45) { scoreFill.style.background = '#4299e1'; scoreMsg = `${Math.round(finalPct)}% — mixed wind, ${Math.round(totalClimb)}m climbing. Decent ride.`; }
+        else if (finalPct >= 30) { scoreFill.style.background = '#ecc94b'; scoreMsg = `${Math.round(finalPct)}% — mostly headwind${totalClimb > 50 ? ' + uphill' : ''}. Try reversing! ⇄`; }
+        else { scoreFill.style.background = '#e53e3e'; scoreMsg = `${Math.round(finalPct)}% — strong headwind${totalClimb > 50 ? ' + climbing' : ''}. Ride the other way! 💨`; }
+        document.getElementById('score-text').textContent = scoreMsg;
+
+        // Gust warning
+        if (wind.gusts > 50) {
+            document.getElementById('score-text').textContent += ' ⚠️ Gusts ' + Math.round(wind.gusts) + ' km/h — take care!';
         }
+
+        // Draw elevation chart
+        drawElevation(elevations);
+
+        // Update legend
+        document.getElementById('legend-box').innerHTML = `<strong>Route:</strong><br><span style="color:#48bb78">■</span> Tailwind<br><span style="color:#4299e1">■</span> Slight tailwind<br><span style="color:#ecc94b">■</span> Slight headwind<br><span style="color:#e53e3e">■</span> Headwind<br><br>Wind: ${Math.round(wind.speed)} km/h ${windDirLabel}${wind.gusts > wind.speed + 5 ? '<br>Gusts: ' + Math.round(wind.gusts) + ' km/h' : ''}`;
 
         document.getElementById('info-panel').style.display = 'block';
         hideStatus();
-
-        // Update legend
-        const legendDiv = document.querySelector('.wind-legend');
-        legendDiv.innerHTML = `<strong>Route colours:</strong><br>
-            <span style="color:#48bb78">■</span> Strong tailwind<br>
-            <span style="color:#4299e1">■</span> Slight tailwind<br>
-            <span style="color:#ecc94b">■</span> Slight headwind<br>
-            <span style="color:#e53e3e">■</span> Strong headwind<br>
-            <br>Wind: ${Math.round(wind.speed)} km/h ${windDirLabel}` +
-            (wind.gusts > wind.speed + 5 ? `<br>Gusts: ${Math.round(wind.gusts)} km/h` : '');
 
     } catch(e) {
         showStatus('Error planning route. Please try again.');
         setTimeout(hideStatus, 3000);
     }
-
     document.getElementById('btn-go').disabled = false;
+}
+
+// === ELEVATION CHART ===
+function drawElevation(elevations) {
+    const canvas = document.getElementById('elev-canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = canvas.offsetWidth * 2;
+    canvas.height = 120;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const min = Math.min(...elevations) - 5;
+    const max = Math.max(...elevations) + 5;
+    const range = max - min || 1;
+    const w = canvas.width;
+    const h = canvas.height - 20;
+    const step = w / (elevations.length - 1);
+
+    // Fill
+    ctx.beginPath();
+    ctx.moveTo(0, h);
+    elevations.forEach((e, i) => {
+        const x = i * step;
+        const y = h - ((e - min) / range) * h;
+        ctx.lineTo(x, y);
+    });
+    ctx.lineTo(w, h);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, 'rgba(72,187,120,0.4)');
+    grad.addColorStop(1, 'rgba(72,187,120,0.05)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    elevations.forEach((e, i) => {
+        const x = i * step;
+        const y = h - ((e - min) / range) * h;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = '#48bb78';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#90cdf4';
+    ctx.font = '18px sans-serif';
+    ctx.fillText(Math.round(max) + 'm', 4, 16);
+    ctx.fillText(Math.round(min) + 'm', 4, h + 16);
+}
+
+// === COMPASS ===
+function initCompass() {
+    // Try DeviceOrientation (mobile)
+    if (window.DeviceOrientationEvent) {
+        // iOS 13+ requires permission
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            document.addEventListener('click', function askPerm() {
+                DeviceOrientationEvent.requestPermission().then(state => {
+                    if (state === 'granted') {
+                        window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                        window.addEventListener('deviceorientation', handleOrientation, true);
+                    }
+                }).catch(() => {});
+                document.removeEventListener('click', askPerm);
+            }, { once: true });
+        } else {
+            window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+            window.addEventListener('deviceorientation', handleOrientation, true);
+        }
+    }
+    // Also use GPS heading when moving
+    if (navigator.geolocation) {
+        navigator.geolocation.watchPosition((pos) => {
+            if (pos.coords.heading !== null && pos.coords.heading !== undefined && !isNaN(pos.coords.heading)) {
+                updateCompass(pos.coords.heading);
+            }
+        }, () => {}, { enableHighAccuracy: true, maximumAge: 2000 });
+    }
+}
+
+function handleOrientation(e) {
+    let heading = null;
+    if (e.webkitCompassHeading !== undefined) {
+        heading = e.webkitCompassHeading; // iOS
+    } else if (e.alpha !== null) {
+        heading = e.absolute ? (360 - e.alpha) : e.alpha;
+    }
+    if (heading !== null) updateCompass(heading);
+}
+
+function updateCompass(heading) {
+    const h = Math.round(heading);
+    document.getElementById('compass-arrow').style.transform = `rotate(${h}deg)`;
+    const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+    document.getElementById('compass-label').textContent = dirs[Math.round(h / 45) % 8] + ' ' + h + '°';
 }
 
 // === HELPERS ===
@@ -651,29 +789,15 @@ function calcBearing(lat1, lon1, lat2, lon2) {
               Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
     return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
 }
-
-function angleDiff(a, b) {
-    let d = Math.abs(a - b) % 360;
-    return d > 180 ? 360 - d : d;
-}
-
-function showStatus(msg) {
-    const el = document.getElementById('status-msg');
-    el.textContent = msg;
-    el.style.display = 'block';
-}
-
-function hideStatus() {
-    document.getElementById('status-msg').style.display = 'none';
-}
+function angleDiff(a, b) { let d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; }
+function showStatus(msg) { const el = document.getElementById('status-msg'); el.textContent = msg; el.style.display = 'block'; }
+function hideStatus() { document.getElementById('status-msg').style.display = 'none'; }
 
 // === AUTOCOMPLETE ===
 let acDebounce = null;
-
 async function searchPlaces(query) {
     if (query.length < 3) return [];
     try {
-        // Bias search towards Canterbury NZ
         const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&countrycodes=nz&viewbox=171.5,-44.0,173.5,-43.0&bounded=0&accept-language=en`);
         return await res.json();
     } catch(e) { return []; }
@@ -682,15 +806,13 @@ async function searchPlaces(query) {
 function setupAutocomplete(inputId, listId, isStart) {
     const input = document.getElementById(inputId);
     const list = document.getElementById(listId);
-
     input.addEventListener('input', () => {
         clearTimeout(acDebounce);
-        const val = input.value.trim();
-        if (val.length < 3) { list.style.display = 'none'; return; }
+        if (input.value.trim().length < 3) { list.style.display = 'none'; return; }
         acDebounce = setTimeout(async () => {
-            const results = await searchPlaces(val);
+            const results = await searchPlaces(input.value.trim());
             list.innerHTML = '';
-            if (results.length === 0) { list.style.display = 'none'; return; }
+            if (!results.length) { list.style.display = 'none'; return; }
             results.forEach(r => {
                 const parts = r.display_name.split(',');
                 const main = parts[0].trim();
@@ -699,53 +821,62 @@ function setupAutocomplete(inputId, listId, isStart) {
                 item.className = 'ac-item';
                 item.innerHTML = main + ' <span class="ac-secondary">' + secondary + '</span>';
                 item.addEventListener('click', () => {
-                    const lat = parseFloat(r.lat);
-                    const lon = parseFloat(r.lon);
+                    const lat = parseFloat(r.lat), lon = parseFloat(r.lon);
                     const latlng = L.latLng(lat, lon);
                     const name = main + (secondary ? ', ' + secondary : '');
                     input.value = name;
                     list.style.display = 'none';
-
                     if (isStart) {
                         if (startMarker) map.removeLayer(startMarker);
-                        startMarker = L.marker(latlng, { icon: startIcon }).addTo(map).bindPopup('Start: ' + name);
+                        startMarker = L.marker(latlng, { icon: startIcon, draggable: true }).addTo(map);
                         map.setView(latlng, 14);
                         clickMode = 'end';
                     } else {
                         if (endMarker) map.removeLayer(endMarker);
-                        endMarker = L.marker(latlng, { icon: endIcon }).addTo(map).bindPopup('Destination: ' + name);
+                        endMarker = L.marker(latlng, { icon: endIcon, draggable: true }).addTo(map);
                         clickMode = 'start';
                     }
-                    updatePlanButton();
+                    updateModeIndicator();
                 });
                 list.appendChild(item);
             });
             list.style.display = 'block';
         }, 300);
     });
-
-    input.addEventListener('keydown', (e) => {
+    input.addEventListener('keydown', async (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
-            // Click first autocomplete result if available
             const first = list.querySelector('.ac-item');
-            if (first) first.click();
+            if (first) { first.click(); return; }
+            // Fallback: geocode directly
+            const loc = await forwardGeocode(input.value);
+            if (loc) {
+                const latlng = L.latLng(loc.lat, loc.lon);
+                input.value = loc.name;
+                if (isStart) {
+                    if (startMarker) map.removeLayer(startMarker);
+                    startMarker = L.marker(latlng, { icon: startIcon, draggable: true }).addTo(map);
+                    map.setView(latlng, 14);
+                    clickMode = 'end';
+                } else {
+                    if (endMarker) map.removeLayer(endMarker);
+                    endMarker = L.marker(latlng, { icon: endIcon, draggable: true }).addTo(map);
+                    clickMode = 'start';
+                }
+                updateModeIndicator();
+            }
         }
     });
-
-    // Close on click outside
     document.addEventListener('click', (e) => {
-        if (!input.contains(e.target) && !list.contains(e.target)) {
-            list.style.display = 'none';
-        }
+        if (!input.contains(e.target) && !list.contains(e.target)) list.style.display = 'none';
     });
 }
 
 setupAutocomplete('input-from', 'ac-from', true);
 setupAutocomplete('input-to', 'ac-to', false);
 
-// Auto-locate on load
-locateMe();
+// === INIT ===
+initCompass();
 </script>
 
 </body>
