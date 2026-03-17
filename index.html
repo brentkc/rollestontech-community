@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rolleston Community Hub | Weather, Traffic & More</title>
+    <meta name="description" content="Live weather, traffic, webcams and games for Rolleston and Selwyn, Canterbury. A community resource by Rolleston Tech Solutions.">
+    <meta property="og:title" content="Rolleston Community Hub">
+    <meta property="og:description" content="Live weather, traffic, webcams and games for Rolleston and Selwyn, Canterbury.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://community.rollestontech.co.nz">
+    <link rel="canonical" href="https://community.rollestontech.co.nz">
+    <link rel="icon" href="https://rollestontech.co.nz/wp-content/uploads/2023/07/cropped-original-logo-symbol.png?w=32" sizes="32x32">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1923;
+            color: #e0e0e0;
+            line-height: 1.6;
+        }
+        header {
+            background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
+            padding: 20px 0;
+            text-align: center;
+            border-bottom: 3px solid #4299e1;
+        }
+        header h1 {
+            font-size: 1.8em;
+            color: #fff;
+            margin-bottom: 5px;
+        }
+        header p {
+            color: #90cdf4;
+            font-size: 0.95em;
+        }
+        header a { color: #90cdf4; text-decoration: none; }
+        header a:hover { color: #fff; text-decoration: underline; }
+        nav {
+            background: #1a202c;
+            padding: 12px 0;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid #2d3748;
+        }
+        nav a {
+            color: #90cdf4;
+            text-decoration: none;
+            margin: 0 15px;
+            font-weight: 600;
+            font-size: 0.95em;
+        }
+        nav a:hover { color: #fff; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .section {
+            background: #1a202c;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 25px;
+            border: 1px solid #2d3748;
+        }
+        .section h2 {
+            color: #4299e1;
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #2d3748;
+        }
+        .section h3 {
+            color: #63b3ed;
+            margin: 15px 0 10px 0;
+        }
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .grid-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+        }
+        .card {
+            background: #2d3748;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #4a5568;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            border-color: #4299e1;
+        }
+        .card h3 { color: #63b3ed; margin-bottom: 8px; }
+        .card p { color: #a0aec0; font-size: 0.9em; }
+        .card a {
+            color: #4299e1;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .card a:hover { color: #63b3ed; text-decoration: underline; }
+        .weather-display {
+            background: #2d3748;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .weather-display img {
+            max-width: 100%;
+            border-radius: 4px;
+        }
+        iframe {
+            border: none;
+            border-radius: 8px;
+            width: 100%;
+        }
+        .links-list { list-style: none; padding: 0; }
+        .links-list li {
+            padding: 12px 15px;
+            border-bottom: 1px solid #2d3748;
+        }
+        .links-list li:last-child { border-bottom: none; }
+        .links-list a {
+            color: #4299e1;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .links-list a:hover { color: #63b3ed; text-decoration: underline; }
+        .links-list .desc { color: #a0aec0; font-size: 0.85em; margin-left: 10px; }
+        .game-container {
+            background: #2d3748;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        #snake-canvas {
+            background: #1a202c;
+            border: 2px solid #4a5568;
+            border-radius: 4px;
+            display: block;
+            margin: 0 auto;
+        }
+        .game-controls {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn {
+            background: #4299e1;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 600;
+        }
+        .btn:hover { background: #3182ce; }
+        .btn-secondary {
+            background: #2d3748;
+            border: 1px solid #4a5568;
+        }
+        .btn-secondary:hover { background: #4a5568; }
+        .d-pad {
+            display: grid;
+            grid-template-columns: 50px 50px 50px;
+            grid-template-rows: 50px 50px 50px;
+            gap: 4px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+        .d-pad button {
+            background: #4a5568;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 1.2em;
+            cursor: pointer;
+        }
+        .d-pad button:hover { background: #718096; }
+        .d-pad .empty { visibility: hidden; }
+        .score { font-size: 1.2em; color: #4299e1; margin-bottom: 10px; }
+        footer {
+            background: #1a202c;
+            text-align: center;
+            padding: 25px;
+            color: #718096;
+            border-top: 1px solid #2d3748;
+            margin-top: 30px;
+        }
+        footer a { color: #4299e1; text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+        @media (max-width: 768px) {
+            .grid-2, .grid-3 { grid-template-columns: 1fr; }
+            nav a { margin: 0 8px; font-size: 0.85em; }
+            header h1 { font-size: 1.4em; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Rolleston Community Hub</h1>
+    <p>Weather, traffic, webcams &amp; games for Rolleston and Selwyn</p>
+    <p style="margin-top: 8px; font-size: 0.85em;">A community resource by <a href="https://rollestontech.co.nz">Rolleston Tech Solutions</a></p>
+</header>
+
+<nav>
+    <a href="#weather">Weather</a>
+    <a href="#traffic">Traffic</a>
+    <a href="#webcams">Webcams</a>
+    <a href="#games">Games</a>
+    <a href="#links">Local Links</a>
+</nav>
+
+<div class="container">
+
+    <!-- WEATHER -->
+    <div class="section" id="weather">
+        <h2>Rolleston Weather</h2>
+        <div class="grid-2">
+            <div class="weather-display">
+                <h3>Current Forecast</h3>
+                <img src="https://wttr.in/Rolleston+New+Zealand_tqp0.png" alt="Rolleston weather forecast" loading="lazy">
+                <p style="margin-top: 10px; color: #a0aec0; font-size: 0.85em;">Live forecast from wttr.in — refreshes on page load</p>
+            </div>
+            <div class="weather-display">
+                <h3>Wind &amp; Rain Radar</h3>
+                <iframe src="https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=9&overlay=rain&product=ecmwf&level=surface&lat=-43.591&lon=172.379&message=true&marker=true&calendar=now&pressure=true&detail=true" height="350" loading="lazy"></iframe>
+            </div>
+        </div>
+        <div style="margin-top: 15px;">
+            <h3>More Weather Resources</h3>
+            <ul class="links-list">
+                <li><a href="https://www.metservice.com/towns-cities/locations/rolleston" target="_blank">MetService Rolleston</a> <span class="desc">Official NZ weather service</span></li>
+                <li><a href="https://www.windy.com/-43.591/172.379" target="_blank">Windy.com</a> <span class="desc">Interactive wind and rain radar</span></li>
+                <li><a href="https://weather.com/weather/today/l/-43.59,172.38" target="_blank">Weather.com</a> <span class="desc">Hourly and 10-day forecast</span></li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- TRAFFIC -->
+    <div class="section" id="traffic">
+        <h2>Live Traffic — Rolleston &amp; Selwyn</h2>
+        <iframe src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d92600!2d172.35!3d-43.59!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sen!2snz!4v1710000000000!5m2!1sen!2snz&layer=traffic" height="500" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+        <p style="margin-top: 10px; color: #a0aec0;">Green = flowing freely | Orange = slower traffic | Red = congestion. Zoom in for specific roads.</p>
+        <div style="margin-top: 15px;">
+            <h3>Traffic Resources</h3>
+            <ul class="links-list">
+                <li><a href="https://www.journeys.nzta.govt.nz/traffic/regions/3" target="_blank">NZTA Journey Planner — Canterbury</a> <span class="desc">Official road conditions, closures, and roadworks</span></li>
+                <li><a href="https://www.journeys.nzta.govt.nz/traffic-cameras/canterbury" target="_blank">NZTA Traffic Cameras — Canterbury</a> <span class="desc">Live highway cameras</span></li>
+                <li><a href="https://www.google.com/maps/@-43.591,172.379,12z/data=!5m1!1e1" target="_blank">Google Maps Traffic — Rolleston</a> <span class="desc">Full-screen traffic map</span></li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- WEBCAMS -->
+    <div class="section" id="webcams">
+        <h2>Canterbury Webcams</h2>
+        <div class="grid-3">
+            <div class="card">
+                <h3>SH1 Rolleston</h3>
+                <p>NZTA traffic camera on State Highway 1 near Rolleston.</p>
+                <p style="margin-top: 10px;"><a href="https://www.journeys.nzta.govt.nz/traffic-cameras/canterbury" target="_blank">View on NZTA &rarr;</a></p>
+            </div>
+            <div class="card">
+                <h3>Christchurch Airport</h3>
+                <p>Live view of runway and terminal area.</p>
+                <p style="margin-top: 10px;"><a href="https://www.see.cam/nz/e9/christchurch" target="_blank">View webcam &rarr;</a></p>
+            </div>
+            <div class="card">
+                <h3>Canterbury Plains</h3>
+                <p>Views across the Canterbury Plains and Southern Alps.</p>
+                <p style="margin-top: 10px;"><a href="https://cwu.co.nz/webcams/" target="_blank">View webcams &rarr;</a></p>
+            </div>
+            <div class="card">
+                <h3>Arthur's Pass</h3>
+                <p>Mountain pass conditions — useful for trips to the West Coast.</p>
+                <p style="margin-top: 10px;"><a href="https://www.arthurspass.com/index.php?page=248" target="_blank">View webcam &rarr;</a></p>
+            </div>
+            <div class="card">
+                <h3>Porters Pass / Springfield</h3>
+                <p>SH73 conditions heading towards Castle Hill and Arthur's Pass.</p>
+                <p style="margin-top: 10px;"><a href="https://www.journeys.nzta.govt.nz/traffic-cameras/canterbury" target="_blank">View on NZTA &rarr;</a></p>
+            </div>
+            <div class="card">
+                <h3>Lyttelton Harbour</h3>
+                <p>View of the harbour and port from the Christchurch side.</p>
+                <p style="margin-top: 10px;"><a href="https://www.see.cam/nz/e9/christchurch" target="_blank">View webcam &rarr;</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- GAMES -->
+    <div class="section" id="games">
+        <h2>Quick Games</h2>
+        <div class="grid-2">
+            <div class="game-container">
+                <h3>Snake</h3>
+                <div class="score">Score: <span id="snake-score">0</span></div>
+                <canvas id="snake-canvas" width="300" height="300"></canvas>
+                <div class="game-controls">
+                    <button class="btn" onclick="startSnake()">New Game</button>
+                </div>
+                <div class="d-pad">
+                    <div class="empty"></div>
+                    <button onclick="setDir(0,-1)">&#9650;</button>
+                    <div class="empty"></div>
+                    <button onclick="setDir(-1,0)">&#9664;</button>
+                    <button onclick="setDir(0,1)">&#9660;</button>
+                    <button onclick="setDir(1,0)">&#9654;</button>
+                </div>
+            </div>
+            <div class="game-container">
+                <h3>Memory Match</h3>
+                <div class="score">Moves: <span id="memory-moves">0</span> | Pairs: <span id="memory-pairs">0</span>/8</div>
+                <div id="memory-board" style="display: grid; grid-template-columns: repeat(4, 60px); gap: 8px; justify-content: center;"></div>
+                <div class="game-controls">
+                    <button class="btn" onclick="startMemory()">New Game</button>
+                </div>
+            </div>
+        </div>
+        <div style="margin-top: 20px;">
+            <h3>More Online Games</h3>
+            <ul class="links-list">
+                <li><a href="https://www.nytimes.com/games/wordle" target="_blank">Wordle</a> <span class="desc">Daily word guessing game</span></li>
+                <li><a href="https://sudoku.com" target="_blank">Sudoku</a> <span class="desc">Classic number puzzle</span></li>
+                <li><a href="https://www.chess.com/play/online" target="_blank">Chess</a> <span class="desc">Play online against others</span></li>
+                <li><a href="https://tetris.com/play-tetris" target="_blank">Tetris</a> <span class="desc">Classic block stacking</span></li>
+                <li><a href="https://www.nytimes.com/crosswords" target="_blank">Crosswords</a> <span class="desc">NYT daily crossword</span></li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- LOCAL LINKS -->
+    <div class="section" id="links">
+        <h2>Local Rolleston &amp; Selwyn Links</h2>
+        <div class="grid-2">
+            <div>
+                <h3>Council &amp; Community</h3>
+                <ul class="links-list">
+                    <li><a href="https://www.selwyn.govt.nz" target="_blank">Selwyn District Council</a></li>
+                    <li><a href="https://www.selwynconnect.co.nz" target="_blank">Selwyn Connect</a> <span class="desc">Local business directory</span></li>
+                    <li><a href="https://www.selwyntimes.co.nz" target="_blank">Selwyn Times</a> <span class="desc">Local news</span></li>
+                    <li><a href="https://www.facebook.com/groups/rollestoncommunitynz/" target="_blank">Rolleston Community Facebook</a></li>
+                </ul>
+            </div>
+            <div>
+                <h3>Services</h3>
+                <ul class="links-list">
+                    <li><a href="https://rollestontech.co.nz/computer-repairs/">Computer Repairs</a> <span class="desc">Rolleston Tech Solutions</span></li>
+                    <li><a href="https://rollestontech.co.nz/apple-macbook-imac-repairs-upgrades/">Apple Repairs</a> <span class="desc">MacBook, iMac, Mac Mini</span></li>
+                    <li><a href="https://rollestontech.co.nz/business-it-services/">Business IT Support</a> <span class="desc">M365, Teams, Intune, networking</span></li>
+                    <li><a href="https://rollestontech.co.nz/contact/">Contact Us</a> <span class="desc">027 450 2579</span></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<footer>
+    <p>Rolleston Community Hub &mdash; a free community resource by <a href="https://rollestontech.co.nz">Rolleston Tech Solutions</a></p>
+    <p style="margin-top: 5px;">54 Riverstone Drive, Rolleston | <a href="tel:+64274502579">027 450 2579</a> | <a href="mailto:info@rollestontech.co.nz">info@rollestontech.co.nz</a></p>
+</footer>
+
+<script>
+// === SNAKE GAME ===
+const canvas = document.getElementById('snake-canvas');
+const ctx = canvas.getContext('2d');
+const size = 15;
+const cols = canvas.width / size;
+const rows = canvas.height / size;
+let snake, food, dx, dy, score, gameLoop;
+
+function startSnake() {
+    clearInterval(gameLoop);
+    snake = [{x: 10, y: 10}];
+    dx = 1; dy = 0; score = 0;
+    document.getElementById('snake-score').textContent = '0';
+    placeFood();
+    gameLoop = setInterval(updateSnake, 120);
+}
+
+function placeFood() {
+    food = {
+        x: Math.floor(Math.random() * cols),
+        y: Math.floor(Math.random() * rows)
+    };
+}
+
+function setDir(x, y) {
+    if (x === -dx && y === -dy) return;
+    dx = x; dy = y;
+}
+
+document.addEventListener('keydown', e => {
+    switch(e.key) {
+        case 'ArrowUp': setDir(0, -1); e.preventDefault(); break;
+        case 'ArrowDown': setDir(0, 1); e.preventDefault(); break;
+        case 'ArrowLeft': setDir(-1, 0); e.preventDefault(); break;
+        case 'ArrowRight': setDir(1, 0); e.preventDefault(); break;
+    }
+});
+
+function updateSnake() {
+    const head = {x: snake[0].x + dx, y: snake[0].y + dy};
+    if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows ||
+        snake.some(s => s.x === head.x && s.y === head.y)) {
+        clearInterval(gameLoop);
+        ctx.fillStyle = '#e53e3e';
+        ctx.font = '20px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Game Over!', canvas.width/2, canvas.height/2);
+        return;
+    }
+    snake.unshift(head);
+    if (head.x === food.x && head.y === food.y) {
+        score++;
+        document.getElementById('snake-score').textContent = score;
+        placeFood();
+    } else {
+        snake.pop();
+    }
+    ctx.fillStyle = '#1a202c';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#48bb78';
+    snake.forEach(s => ctx.fillRect(s.x * size + 1, s.y * size + 1, size - 2, size - 2));
+    ctx.fillStyle = '#e53e3e';
+    ctx.fillRect(food.x * size + 1, food.y * size + 1, size - 2, size - 2);
+}
+
+// === MEMORY GAME ===
+const emojis = ['🖥️','🔧','📱','💻','🖨️','🔌','🖱️','⌨️'];
+let memCards, memFlipped, memMatched, memMoves, memLocked;
+
+function startMemory() {
+    memMoves = 0; memMatched = 0; memFlipped = []; memLocked = false;
+    document.getElementById('memory-moves').textContent = '0';
+    document.getElementById('memory-pairs').textContent = '0';
+    const board = document.getElementById('memory-board');
+    board.innerHTML = '';
+    memCards = [...emojis, ...emojis].sort(() => Math.random() - 0.5);
+    memCards.forEach((emoji, i) => {
+        const card = document.createElement('div');
+        card.style.cssText = 'width:60px;height:60px;background:#4a5568;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1.5em;user-select:none;border:2px solid #718096;';
+        card.dataset.idx = i;
+        card.textContent = '?';
+        card.onclick = () => flipCard(card, i);
+        board.appendChild(card);
+    });
+}
+
+function flipCard(card, idx) {
+    if (memLocked || memFlipped.length >= 2 || card.dataset.matched) return;
+    if (memFlipped.some(f => f.idx === idx)) return;
+    card.textContent = memCards[idx];
+    card.style.background = '#2d3748';
+    memFlipped.push({card, idx});
+    if (memFlipped.length === 2) {
+        memMoves++;
+        document.getElementById('memory-moves').textContent = memMoves;
+        const [a, b] = memFlipped;
+        if (memCards[a.idx] === memCards[b.idx]) {
+            a.card.dataset.matched = true;
+            b.card.dataset.matched = true;
+            a.card.style.border = '2px solid #48bb78';
+            b.card.style.border = '2px solid #48bb78';
+            memMatched++;
+            document.getElementById('memory-pairs').textContent = memMatched;
+            memFlipped = [];
+        } else {
+            memLocked = true;
+            setTimeout(() => {
+                a.card.textContent = '?';
+                b.card.textContent = '?';
+                a.card.style.background = '#4a5568';
+                b.card.style.background = '#4a5568';
+                memFlipped = [];
+                memLocked = false;
+            }, 800);
+        }
+    }
+}
+
+// Auto-start games
+startSnake();
+startMemory();
+</script>
+
+</body>
+</html>
