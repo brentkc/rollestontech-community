@@ -334,11 +334,16 @@ async function detectLocation() {
                 userLon = pos.coords.longitude;
                 // Reverse geocode to get place name
                 try {
-                    const geo = await fetch(`https://geocoding-api.open-meteo.com/v1/reverse?latitude=${userLat}&longitude=${userLon}&count=1`);
+                    const geo = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${userLat}&lon=${userLon}&format=json&zoom=14&accept-language=en`);
                     const geoData = await geo.json();
-                    if (geoData.results && geoData.results.length > 0) {
-                        const r = geoData.results[0];
-                        userLocation = r.name + (r.admin1 ? ', ' + r.admin1 : '');
+                    if (geoData && geoData.address) {
+                        const a = geoData.address;
+                        // Prefer suburb/town/village over administrative city names
+                        const place = a.suburb || a.town || a.village || a.hamlet || a.city || 'Unknown';
+                        // Clean up ugly admin names
+                        const cleanPlace = place.replace(/ Community$/i, '').replace(/ Board$/i, '');
+                        const region = a.state || a.county || '';
+                        userLocation = cleanPlace + (region ? ', ' + region : '');
                     }
                 } catch(e) {}
                 resolve(true);
