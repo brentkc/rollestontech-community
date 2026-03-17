@@ -140,7 +140,7 @@
         .day-card .day-temps .low { color: #90cdf4; font-weight: 400; }
         .day-card .day-rain { font-size: 0.8em; color: #63b3ed; margin-top: 4px; }
 
-        /* Speedometer */
+        /* Speedometer gauge */
         .speedo-section {
             background: rgba(255,255,255,0.08);
             border-radius: 20px;
@@ -153,47 +153,79 @@
             font-size: 1.1em;
             font-weight: 400;
             color: #90cdf4;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             text-transform: uppercase;
             letter-spacing: 2px;
         }
-        .speedo-display {
+        .gauge-wrap {
             position: relative;
-            width: 250px;
-            height: 140px;
+            width: 280px;
+            height: 170px;
             margin: 0 auto;
         }
-        .speedo-value {
-            font-size: 4.5em;
+        .gauge-wrap svg { width: 100%; height: 100%; }
+        .gauge-text {
+            position: absolute;
+            bottom: 10px;
+            left: 0;
+            right: 0;
+            text-align: center;
+        }
+        .gauge-text .speed-num {
+            font-size: 3.5em;
             font-weight: 200;
             line-height: 1;
         }
-        .speedo-unit {
-            font-size: 1em;
+        .gauge-text .speed-unit {
+            font-size: 0.9em;
             color: #90cdf4;
-            margin-top: 5px;
         }
         .speedo-label {
+            font-size: 0.9em;
+            color: #90cdf4;
+            margin-top: 8px;
+            font-weight: 500;
+        }
+
+        /* Ad banner */
+        .ad-banner {
+            background: linear-gradient(135deg, #1a365d, #2c5282);
+            border: 1px solid #4299e1;
+            border-radius: 12px;
+            padding: 15px 25px;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .ad-banner .ad-text {
+            flex: 1;
+            min-width: 200px;
+        }
+        .ad-banner .ad-text h3 {
+            font-size: 1em;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 3px;
+        }
+        .ad-banner .ad-text p {
             font-size: 0.85em;
-            color: #718096;
-            margin-top: 10px;
+            color: #90cdf4;
         }
-        .speedo-bar {
-            width: 100%;
-            max-width: 300px;
-            height: 6px;
-            background: #2d3748;
-            border-radius: 3px;
-            margin: 15px auto 0;
-            overflow: hidden;
+        .ad-banner .ad-btn {
+            background: #4299e1;
+            color: #fff;
+            text-decoration: none;
+            padding: 10px 22px;
+            border-radius: 8px;
+            font-size: 0.85em;
+            font-weight: 600;
+            white-space: nowrap;
+            transition: background 0.2s;
         }
-        .speedo-bar-fill {
-            height: 100%;
-            border-radius: 3px;
-            transition: width 0.5s ease, background 0.5s ease;
-            width: 0%;
-            background: #48bb78;
-        }
+        .ad-banner .ad-btn:hover { background: #3182ce; }
 
         /* Quick links */
         .quick-links {
@@ -257,7 +289,8 @@
         @media (max-width: 600px) {
             .header h1 { font-size: 1.8em; }
             .temp-display { font-size: 3.5em; }
-            .speedo-value { font-size: 3em; }
+            .gauge-wrap { width: 220px; height: 140px; }
+            .gauge-text .speed-num { font-size: 2.5em; }
             .details { gap: 12px; }
             .forecast-days { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
             .day-card { padding: 10px 5px; }
@@ -333,13 +366,61 @@
         <div class="forecast-days" id="forecast-days"></div>
     </div>
 
-    <!-- Speedometer -->
+    <!-- Speedometer gauge -->
     <div class="speedo-section" id="speedo-section">
         <h2>Your Speed</h2>
-        <div class="speedo-value" id="speedo-value">--</div>
-        <div class="speedo-unit">km/h</div>
-        <div class="speedo-bar"><div class="speedo-bar-fill" id="speedo-bar"></div></div>
+        <div class="gauge-wrap">
+            <svg viewBox="0 0 280 160">
+                <!-- Tick marks -->
+                <g stroke="#2d3748" stroke-width="2">
+                    <line x1="30" y1="145" x2="40" y2="135" />
+                    <line x1="18" y1="105" x2="30" y2="100" />
+                    <line x1="22" y1="62" x2="34" y2="65" />
+                    <line x1="45" y1="28" x2="54" y2="37" />
+                    <line x1="82" y1="8" x2="87" y2="20" />
+                    <line x1="140" y1="2" x2="140" y2="14" />
+                    <line x1="198" y1="8" x2="193" y2="20" />
+                    <line x1="235" y1="28" x2="226" y2="37" />
+                    <line x1="258" y1="62" x2="246" y2="65" />
+                    <line x1="262" y1="105" x2="250" y2="100" />
+                    <line x1="250" y1="145" x2="240" y2="135" />
+                </g>
+                <!-- Speed labels -->
+                <g fill="#4a5568" font-size="11" text-anchor="middle">
+                    <text x="42" y="152">0</text>
+                    <text x="15" y="100">20</text>
+                    <text x="30" y="52">40</text>
+                    <text x="70" y="18">60</text>
+                    <text x="140" y="0">80</text>
+                    <text x="210" y="18">100</text>
+                    <text x="250" y="52">120</text>
+                    <text x="265" y="100">140</text>
+                    <text x="242" y="152">160</text>
+                </g>
+                <!-- Background arc -->
+                <path d="M 30 145 A 120 120 0 1 1 250 145" fill="none" stroke="#2d3748" stroke-width="12" stroke-linecap="round" />
+                <!-- Coloured arc (animated) -->
+                <path id="gauge-arc" d="M 30 145 A 120 120 0 1 1 250 145" fill="none" stroke="#48bb78" stroke-width="12" stroke-linecap="round" stroke-dasharray="0 600" />
+                <!-- Needle -->
+                <line id="gauge-needle" x1="140" y1="145" x2="140" y2="30" stroke="#e53e3e" stroke-width="3" stroke-linecap="round" transform="rotate(-130, 140, 145)" style="transition: transform 0.5s ease;" />
+                <circle cx="140" cy="145" r="8" fill="#e53e3e" />
+                <circle cx="140" cy="145" r="4" fill="#1a202c" />
+            </svg>
+            <div class="gauge-text">
+                <div class="speed-num" id="speedo-value">--</div>
+                <div class="speed-unit">km/h</div>
+            </div>
+        </div>
         <div class="speedo-label" id="speedo-label">Waiting for GPS...</div>
+    </div>
+
+    <!-- Ad banner -->
+    <div class="ad-banner">
+        <div class="ad-text">
+            <h3>Need Computer Help?</h3>
+            <p>PC repairs, Apple servicing &amp; business IT support — right here in Rolleston</p>
+        </div>
+        <a class="ad-btn" href="https://rollestontech.co.nz" target="_blank" rel="noopener">Rolleston Tech Solutions</a>
     </div>
 
     <!-- Quick links -->
@@ -486,50 +567,53 @@ async function loadWeather() {
     }
 }
 
-// === SPEEDOMETER ===
+// === SPEEDOMETER GAUGE ===
+const GAUGE_MAX = 160; // max km/h on dial
+const ARC_LENGTH = 565; // approximate path length of the arc
+
+function updateGauge(kmh) {
+    // Clamp
+    const clamped = Math.min(Math.max(kmh, 0), GAUGE_MAX);
+    const pct = clamped / GAUGE_MAX;
+
+    // Update number
+    document.getElementById('speedo-value').textContent = kmh;
+
+    // Needle rotation: -130 deg (0 km/h) to +130 deg (160 km/h)
+    const angle = -130 + (pct * 260);
+    document.getElementById('gauge-needle').setAttribute('transform', `rotate(${angle}, 140, 145)`);
+
+    // Arc fill
+    const arc = document.getElementById('gauge-arc');
+    const dashLen = pct * ARC_LENGTH;
+    arc.setAttribute('stroke-dasharray', `${dashLen} ${ARC_LENGTH}`);
+
+    // Color based on speed
+    let color, label;
+    if (kmh <= 0) { color = '#4a5568'; label = 'Stationary'; }
+    else if (kmh <= 5) { color = '#48bb78'; label = 'Walking'; }
+    else if (kmh <= 15) { color = '#48bb78'; label = 'Running / Cycling'; }
+    else if (kmh <= 50) { color = '#4299e1'; label = 'Urban driving'; }
+    else if (kmh <= 100) { color = '#ecc94b'; label = 'Open road'; }
+    else { color = '#e53e3e'; label = 'Motorway'; }
+
+    arc.setAttribute('stroke', color);
+    document.getElementById('speedo-label').textContent = label;
+}
+
 function initSpeedo() {
     if (!navigator.geolocation) {
-        document.getElementById('speedo-label').textContent = 'GPS not available';
+        document.getElementById('speedo-label').textContent = 'GPS not available on this device';
         return;
     }
     navigator.geolocation.watchPosition(
         (pos) => {
-            let speed = pos.coords.speed; // m/s, can be null
-            if (speed === null || speed === undefined) {
-                document.getElementById('speedo-value').textContent = '0';
-                document.getElementById('speedo-label').textContent = 'Stationary';
-                document.getElementById('speedo-bar').style.width = '0%';
-                document.getElementById('speedo-bar').style.background = '#48bb78';
-                return;
-            }
-            const kmh = Math.round(speed * 3.6);
-            document.getElementById('speedo-value').textContent = kmh;
-
-            // Bar fill (max 120 km/h)
-            const pct = Math.min(kmh / 120 * 100, 100);
-            const bar = document.getElementById('speedo-bar');
-            bar.style.width = pct + '%';
-
-            // Color based on speed
-            if (kmh <= 5) {
-                bar.style.background = '#48bb78';
-                document.getElementById('speedo-label').textContent = 'Walking';
-            } else if (kmh <= 15) {
-                bar.style.background = '#48bb78';
-                document.getElementById('speedo-label').textContent = 'Running / Cycling';
-            } else if (kmh <= 50) {
-                bar.style.background = '#4299e1';
-                document.getElementById('speedo-label').textContent = 'Urban driving';
-            } else if (kmh <= 100) {
-                bar.style.background = '#ecc94b';
-                document.getElementById('speedo-label').textContent = 'Open road';
-            } else {
-                bar.style.background = '#e53e3e';
-                document.getElementById('speedo-label').textContent = 'Motorway';
-            }
+            let speed = pos.coords.speed;
+            const kmh = (speed === null || speed === undefined) ? 0 : Math.round(speed * 3.6);
+            updateGauge(kmh);
         },
         () => {
-            document.getElementById('speedo-label').textContent = 'Location access needed for speed';
+            document.getElementById('speedo-label').textContent = 'Allow location access for speed';
         },
         { enableHighAccuracy: true, maximumAge: 1000 }
     );
