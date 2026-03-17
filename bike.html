@@ -299,9 +299,6 @@
 
 <div style="position:relative;flex:1;display:flex;flex-direction:column;">
     <div id="map"></div>
-    <div id="windy-overlay" style="position:absolute;top:0;left:0;right:0;bottom:0;z-index:450;pointer-events:none;display:none;opacity:0.55;">
-        <iframe id="windy-iframe" style="width:100%;height:100%;border:none;pointer-events:none;" src="" loading="lazy"></iframe>
-    </div>
     <div class="status-msg" id="status-msg"></div>
     <div class="compass" id="compass">
         <div class="compass-arrow" id="compass-arrow">➤</div>
@@ -356,45 +353,22 @@ const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
     maxZoom: 19
 }).addTo(map);
 
-// Wind overlay toggle
-let windOverlayVisible = false;
+// Wind map button - opens Windy centered on current view
 const windToggle = L.control({ position: 'topleft' });
 windToggle.onAdd = function() {
     const btn = L.DomUtil.create('div');
-    btn.innerHTML = '<button id="wind-toggle-btn" style="background:#2d3748;color:#90cdf4;border:2px solid #4a5568;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:0.8em;font-weight:600;white-space:nowrap;" onclick="toggleWindMap()">💨 Wind Map</button>';
+    btn.innerHTML = '<button style="background:#2d3748;color:#90cdf4;border:2px solid #4a5568;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:0.8em;font-weight:600;white-space:nowrap;" onclick="openWindMap()">💨 Wind Map</button>';
     L.DomEvent.disableClickPropagation(btn);
     return btn;
 };
 windToggle.addTo(map);
 
-function toggleWindMap() {
-    const overlay = document.getElementById('windy-overlay');
-    const btn = document.getElementById('wind-toggle-btn');
-    windOverlayVisible = !windOverlayVisible;
-    if (windOverlayVisible) {
-        updateWindyOverlay();
-        overlay.style.display = 'block';
-        btn.style.background = '#4299e1';
-        btn.style.color = '#fff';
-        btn.style.borderColor = '#4299e1';
-    } else {
-        overlay.style.display = 'none';
-        btn.style.background = '#2d3748';
-        btn.style.color = '#90cdf4';
-        btn.style.borderColor = '#4a5568';
-    }
-}
-
-function updateWindyOverlay() {
+function openWindMap() {
     const center = map.getCenter();
     const zoom = map.getZoom();
-    const iframe = document.getElementById('windy-iframe');
-    iframe.src = `https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=${zoom}&overlay=wind&product=ecmwf&level=surface&lat=${center.lat}&lon=${center.lng}&message=&marker=&calendar=now&pressure=&detail=&menu=`;
+    const windyUrl = `https://www.windy.com/${center.lat}/${center.lng}?${center.lat},${center.lng},${zoom}`;
+    window.open(windyUrl, '_blank');
 }
-
-map.on('moveend', function() {
-    if (windOverlayVisible) updateWindyOverlay();
-});
 
 const legend = L.control({ position: 'bottomright' });
 legend.onAdd = function() {
@@ -432,15 +406,27 @@ function updateModeIndicator() {
 }
 
 // === MAP CLICK ===
+function clearRoute() {
+    if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+    windArrows.forEach(a => map.removeLayer(a));
+    windArrows = [];
+    document.getElementById('info-panel').style.display = 'none';
+}
+
 map.on('click', async function(e) {
     const latlng = e.latlng;
     const name = await reverseGeocode(latlng.lat, latlng.lng);
+
+    // Clear old route when setting new points
+    clearRoute();
+
     if (clickMode === 'start') {
         if (startMarker) map.removeLayer(startMarker);
         startMarker = L.marker(latlng, { icon: startIcon, draggable: true }).addTo(map).bindPopup('Start: ' + name);
         startMarker.on('dragend', async () => {
             const p = startMarker.getLatLng();
             document.getElementById('input-from').value = await reverseGeocode(p.lat, p.lng);
+            clearRoute();
         });
         document.getElementById('input-from').value = name;
         clickMode = 'end';
@@ -450,6 +436,7 @@ map.on('click', async function(e) {
         endMarker.on('dragend', async () => {
             const p = endMarker.getLatLng();
             document.getElementById('input-to').value = await reverseGeocode(p.lat, p.lng);
+            clearRoute();
         });
         document.getElementById('input-to').value = name;
         clickMode = 'start';
