@@ -362,6 +362,10 @@
         <h4>Elevation Profile</h4>
         <canvas class="elev-canvas" id="elev-canvas"></canvas>
     </div>
+    <div id="best-time-section" style="display:none;margin-top:10px;background:rgba(255,255,255,0.03);border-radius:8px;padding:10px 12px;">
+        <h4 style="font-size:0.7em;color:#90cdf4;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Best Time to Ride</h4>
+        <div id="best-time-content"></div>
+    </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -1198,6 +1202,12 @@ async function planRoute() {
         // Show info for best route
         updateInfoPanel(scoredRoutes[0], 0, scoredRoutes.length);
 
+        // Calculate best time to ride based on route bearing
+        const bestCoords = scoredRoutes[0].coords;
+        const routeBearing = calcBearing(bestCoords[0][1], bestCoords[0][0], bestCoords[bestCoords.length-1][1], bestCoords[bestCoords.length-1][0]);
+        const midCoord = bestCoords[Math.floor(bestCoords.length / 2)];
+        calcBestTime(routeBearing, midCoord[1], midCoord[0]);
+
         document.getElementById('info-panel').style.display = 'block';
         hideStatus();
 
@@ -1206,6 +1216,82 @@ async function planRoute() {
         setTimeout(hideStatus, 3000);
     }
     document.getElementById('btn-go').disabled = false;
+}
+
+// === BEST TIME TO RIDE ===
+async function calcBestTime(routeBearing, midLat, midLon) {
+    try {
+        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${midLat}&longitude=${midLon}&hourly=wind_speed_10m,wind_direction_10m&timezone=auto&forecast_hours=18`);
+        const data = await res.json();
+        const h = data.hourly;
+
+        const results = [];
+        for (let i = 0; i < h.time.length; i++) {
+            const windTo = (h.wind_direction_10m[i] + 180) % 360;
+            const diff = angleDiff(routeBearing, windTo);
+            const tailwindFactor = Math.cos(diff * Math.PI / 180); // -1 to +1
+            const windSpeed = h.wind_speed_10m[i];
+            // Benefit = tailwind factor * wind speed (positive = tailwind helping, negative = headwind hurting)
+            const benefit = tailwindFactor * windSpeed;
+            const time = h.time[i];
+            const hour = new Date(time).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true });
+            const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+            const dirLabel = dirs[Math.round(h.wind_direction_10m[i] / 45) % 8];
+
+            results.push({ time, hour, windSpeed, dirLabel, diff, tailwindFactor, benefit });
+        }
+
+        // Find the best hour
+        const best = results.reduce((a, b) => a.benefit > b.benefit ? a : b);
+        const now = results[0];
+
+        const container = document.getElementById('best-time-content');
+        let html = '<div style="display:flex;flex-direction:column;gap:6px;font-size:0.82em;">';
+
+        // Current conditions
+        const nowColor = now.benefit > 5 ? '#48bb78' : now.benefit > -5 ? '#ecc94b' : '#e53e3e';
+        const nowLabel = now.benefit > 5 ? 'Good now' : now.benefit > -5 ? 'OK now' : 'Bad now';
+        html += `<div style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Now: ${Math.round(now.windSpeed)} km/h ${now.dirLabel}</span>
+            <span style="color:${nowColor};font-weight:600;">${nowLabel}</span>
+        </div>`;
+
+        // Best time
+        if (best.benefit > now.benefit + 3) {
+            const bestColor = best.benefit > 5 ? '#48bb78' : '#4299e1';
+            html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:rgba(72,187,120,0.1);border-radius:6px;border:1px solid ${bestColor};">
+                <span style="font-weight:600;">Best: ${best.hour}</span>
+                <span style="color:${bestColor};">${Math.round(best.windSpeed)} km/h ${best.dirLabel}${best.tailwindFactor > 0.3 ? ' (tailwind)' : ''}</span>
+            </div>`;
+        } else {
+            html += `<div style="color:#90cdf4;">Wind stays similar — ride whenever suits you</div>`;
+        }
+
+        // Show next few hours as mini timeline
+        html += '<div style="display:flex;gap:2px;margin-top:4px;">';
+        const showHours = results.slice(0, 12);
+        showHours.forEach(r => {
+            let barColor;
+            if (r.benefit > 5) barColor = '#48bb78';
+            else if (r.benefit > 0) barColor = '#4299e1';
+            else if (r.benefit > -5) barColor = '#ecc94b';
+            else barColor = '#e53e3e';
+            const h = new Date(r.time).getHours();
+            const label = h % 3 === 0 ? `${h}` : '';
+            html += `<div style="flex:1;text-align:center;">
+                <div style="height:20px;background:${barColor};border-radius:2px;opacity:0.8;" title="${r.hour}: ${Math.round(r.windSpeed)} km/h ${r.dirLabel}"></div>
+                <div style="font-size:9px;color:#666;margin-top:2px;">${label}</div>
+            </div>`;
+        });
+        html += '</div>';
+        html += '<div style="font-size:9px;color:#555;margin-top:2px;">Green = tailwind | Red = headwind | Next 12 hours</div>';
+        html += '</div>';
+
+        container.innerHTML = html;
+        document.getElementById('best-time-section').style.display = 'block';
+    } catch(e) {
+        console.warn('Best time calculation failed', e);
+    }
 }
 
 // === ELEVATION CHART ===
