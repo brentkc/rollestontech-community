@@ -886,23 +886,15 @@ function displayRoute(scored, isBest) {
             }));
         }
 
-        // Wind arrows - only show a few, spaced by real distance (~2km apart minimum)
-        // Filter wind points to avoid cluttering on short routes
-        const routeDistM = scored.distKm * 1000;
-        const minArrowSpacing = Math.max(2000, routeDistM / 4); // at least 2km apart, max 4 arrows
-        let lastArrowDist = -minArrowSpacing; // force first arrow to show
-        const filteredWindPoints = windPoints.filter(wp => {
-            // Approximate distance along route for this point
-            const pctAlong = wp.idx / (coords.length - 1);
-            const distAlong = pctAlong * routeDistM;
-            if (distAlong - lastArrowDist >= minArrowSpacing) {
-                lastArrowDist = distAlong;
-                return true;
-            }
-            return false;
-        });
+        // Wind arrows - show max 3, evenly spaced along the route
+        const wpCount = windPoints.length;
+        const showIndices = wpCount <= 3
+            ? windPoints.map((_, i) => i)
+            : [0, Math.floor(wpCount / 2), wpCount - 1];
 
-        filteredWindPoints.forEach(wp => {
+        showIndices.forEach(idx => {
+            const wp = windPoints[idx];
+            if (!wp) return;
             const windBlowsTo = (wp.direction + 180) % 360;
             const fromLabel = ['N','NE','E','SE','S','SW','W','NW'][Math.round(wp.direction / 45) % 8];
             const speedKmh = Math.round(wp.speed);
