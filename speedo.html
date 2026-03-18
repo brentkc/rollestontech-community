@@ -101,9 +101,22 @@
             position: absolute;
             top: 20px;
             left: 20px;
+            text-align: center;
         }
         .compass-display .comp-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 1px; }
-        .compass-display .comp-val { font-size: 28px; font-weight: 200; color: #888; }
+        .compass-display .comp-val { font-size: 22px; font-weight: 200; color: #888; margin-top: 4px; }
+        .compass-ring {
+            width: 70px;
+            height: 70px;
+            position: relative;
+            margin: 0 auto 4px;
+        }
+        .compass-ring svg {
+            width: 100%;
+            height: 100%;
+            transition: transform 0.3s ease;
+        }
+        .compass-n { font-size: 11px; font-weight: 700; }
 
         /* Back link */
         .back-link {
@@ -163,6 +176,25 @@
 
     <div class="compass-display">
         <div class="comp-label">Heading</div>
+        <div class="compass-ring">
+            <svg id="compass-svg" viewBox="0 0 70 70">
+                <!-- Outer ring -->
+                <circle cx="35" cy="35" r="32" fill="none" stroke="#333" stroke-width="2" />
+                <!-- Cardinal ticks -->
+                <line x1="35" y1="5" x2="35" y2="10" stroke="#666" stroke-width="1.5" />
+                <line x1="35" y1="60" x2="35" y2="65" stroke="#444" stroke-width="1" />
+                <line x1="5" y1="35" x2="10" y2="35" stroke="#444" stroke-width="1" />
+                <line x1="60" y1="35" x2="65" y2="35" stroke="#444" stroke-width="1" />
+                <!-- N label -->
+                <text x="35" y="18" text-anchor="middle" class="compass-n" fill="#e53e3e">N</text>
+                <!-- North arrow (red, points up) -->
+                <polygon points="35,7 31,22 35,19 39,22" fill="#e53e3e" />
+                <!-- South arrow (grey) -->
+                <polygon points="35,63 31,48 35,51 39,48" fill="#444" />
+                <!-- Center dot -->
+                <circle cx="35" cy="35" r="3" fill="#888" />
+            </svg>
+        </div>
         <div class="comp-val" id="compass-val">--</div>
     </div>
 
@@ -339,10 +371,17 @@ function handleOrientation(e) {
     if (e.webkitCompassHeading !== undefined) heading = e.webkitCompassHeading;
     else if (e.alpha !== null) heading = e.absolute ? (360 - e.alpha) : e.alpha;
     if (heading !== null) {
-        const h = Math.round(heading);
-        const dirs = ['N','NE','E','SE','S','SW','W','NW'];
-        document.getElementById('compass-val').textContent = dirs[Math.round(h / 45) % 8] + ' ' + h + '°';
+        updateCompassDisplay(heading);
     }
+}
+
+function updateCompassDisplay(heading) {
+    const h = Math.round(heading);
+    const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+    document.getElementById('compass-val').textContent = dirs[Math.round(h / 45) % 8] + ' ' + h + '°';
+    // Rotate the compass ring so N arrow always points to true north
+    // If user faces east (heading=90), rotate ring -90 so N points left (which is north relative to user)
+    document.getElementById('compass-svg').style.transform = `rotate(${-h}deg)`;
 }
 
 // === GPS ===
@@ -364,9 +403,7 @@ function initGPS() {
 
             // Use GPS heading as compass backup
             if (pos.coords.heading !== null && pos.coords.heading !== undefined && !isNaN(pos.coords.heading)) {
-                const h = Math.round(pos.coords.heading);
-                const dirs = ['N','NE','E','SE','S','SW','W','NW'];
-                document.getElementById('compass-val').textContent = dirs[Math.round(h / 45) % 8] + ' ' + h + '°';
+                updateCompassDisplay(pos.coords.heading);
             }
         },
         (err) => {

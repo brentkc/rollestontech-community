@@ -287,7 +287,12 @@
     </div>
     <div class="control-group" style="flex:0;min-width:auto;">
         <label>&nbsp;</label>
-        <div style="display:flex;gap:5px;">
+        <div style="display:flex;gap:5px;flex-wrap:wrap;">
+            <select id="fitness-level" style="background:#2d3748;color:#fff;border:1px solid #4a5568;padding:8px 6px;border-radius:8px;font-size:0.8em;" onchange="updateFitness()">
+                <option value="casual">Casual</option>
+                <option value="moderate" selected>Moderate</option>
+                <option value="fit">Fit</option>
+            </select>
             <button class="btn btn-rev" onclick="reverseRoute()" title="Swap start and end">⇄</button>
             <button class="btn btn-go" id="btn-go" onclick="planRoute()" disabled>Go</button>
             <button class="btn btn-clear" onclick="clearAll()">✕</button>
@@ -668,18 +673,33 @@ let scoredRoutes = []; // Store scored route data
 // P_total = P_gravity + P_drag + P_rolling
 // If P_total < 0, cyclist is coasting (0 effort)
 
-const PHYSICS = {
-    mass: 85,          // rider + bike (kg) — 75kg rider + 10kg bike
-    CdA: 0.35,        // drag coefficient * frontal area (m²) — casual cyclist on flat bars
-    Crr: 0.005,       // rolling resistance coefficient — road tyres on asphalt
-    airDensity: 1.225, // kg/m³ at sea level
-    g: 9.81,           // gravity m/s²
-    riderSpeed: 5.0    // base cycling speed m/s (~18 km/h)
+// Fitness presets: affects base speed and how much they slow on climbs/headwind
+const FITNESS = {
+    casual:   { speed: 4.2, label: 'Casual (~15 km/h)', climbFactor: 90, windFactor: 0.18 },
+    moderate: { speed: 5.0, label: 'Moderate (~18 km/h)', climbFactor: 80, windFactor: 0.15 },
+    fit:      { speed: 6.9, label: 'Fit (~25 km/h)', climbFactor: 60, windFactor: 0.10 }
 };
-// Verified against bikecalculator.com:
-// Flat no wind: ~48W (benchmark 45-55W) ✓
-// 5% climb no wind: ~257W (benchmark 250-260W) ✓
-// Flat 30km/h headwind: ~210W (benchmark 130-150W, varies by position) ~close
+
+const PHYSICS = {
+    mass: 85,          // rider + bike (kg)
+    CdA: 0.35,        // drag coefficient * frontal area (m²)
+    Crr: 0.005,       // rolling resistance coefficient
+    airDensity: 1.225, // kg/m³
+    g: 9.81,
+    riderSpeed: 5.0,   // updated by fitness selector
+    climbFactor: 80,   // updated by fitness selector
+    windFactor: 0.15   // updated by fitness selector
+};
+
+function updateFitness() {
+    const level = document.getElementById('fitness-level').value;
+    const f = FITNESS[level];
+    PHYSICS.riderSpeed = f.speed;
+    PHYSICS.climbFactor = f.climbFactor;
+    PHYSICS.windFactor = f.windFactor;
+    // Re-plan if route exists
+    if (scoredRoutes.length > 0 && startMarker && endMarker) planRoute();
+}
 
 function segmentPowerWatts(gradient, headwindMs, groundSpeedMs) {
     // gradient: decimal (0.05 = 5%)
@@ -765,17 +785,14 @@ async function scoreRoute(route, windPointsCache) {
         tailwindScore += Math.cos(angleDiffDeg * Math.PI / 180);
         totalSegments++;
 
-        // Adjusted speed for this segment based on gradient and wind
-        // Casual cyclist: ~18km/h base, loses speed on climbs and in headwind
-        let segSpeed = PHYSICS.riderSpeed; // base 5 m/s (~18 km/h)
-        // Climbing: lose ~0.8 m/s per 1% gradient (casual cyclist)
-        // So 5% climb: 5 - 4 = 1 m/s (~3.6 km/h), realistic for casual up a steep hill
-        if (gradient > 0) segSpeed = Math.max(1.0, segSpeed - gradient * 80);
-        // Descent: gain speed, gravity accelerates, cap at ~45 km/h
+        // Adjusted speed based on gradient, wind, and rider fitness
+        let segSpeed = PHYSICS.riderSpeed;
+        // Climbing: fitness determines how much speed is lost per % gradient
+        if (gradient > 0) segSpeed = Math.max(1.0, segSpeed - gradient * PHYSICS.climbFactor);
+        // Descent: everyone speeds up, cap at ~45 km/h
         else if (gradient < -0.01) segSpeed = Math.min(12.5, segSpeed + Math.abs(gradient) * 60);
-        // Wind: headwind reduces speed, tailwind increases
-        // Lose ~0.15 m/s per 1 m/s of headwind (partial effect — you push harder)
-        segSpeed = Math.max(1.0, segSpeed - headwindMs * 0.15);
+        // Wind: fitter riders resist headwind better
+        segSpeed = Math.max(1.0, segSpeed - headwindMs * PHYSICS.windFactor);
 
         // Power required at this actual speed
         const watts = segmentPowerWatts(gradient, headwindMs, segSpeed);
