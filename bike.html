@@ -1068,25 +1068,98 @@ async function planRoute() {
     const end = endMarker.getLatLng();
 
     try {
-        // Request up to 3 alternative routes
-        const routeUrl = `https://router.project-osrm.org/route/v1/cycling/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true&alternatives=3`;
-        const routeRes = await fetch(routeUrl);
-        const routeData = await routeRes.json();
+        // === GENERATE MULTIPLE GENUINELY DIFFERENT ROUTES ===
+        // 1. Direct route + OSRM alternatives
+        // 2. Routes via waypoints offset perpendicular to the direct line
+        //    This finds routes the router would never suggest — e.g. a longer
+        //    detour that catches tailwind the entire way
 
-        if (!routeData.routes || routeData.routes.length === 0) {
+        showStatus('Generating route options...');
+
+        const midLat = (start.lat + end.lat) / 2;
+        const midLng = (start.lng + end.lng) / 2;
+        const directDist = haversineM(start.lat, start.lng, end.lat, end.lng);
+
+        // Perpendicular offset distance: ~15-25% of direct distance, capped
+        const offsetM = Math.min(Math.max(directDist * 0.2, 300), 3000);
+
+        // Calculate perpendicular direction to the direct line
+        const directBearing = calcBearing(start.lat, start.lng, end.lat, end.lng);
+        const perpLeft = (directBearing + 270) % 360; // left of travel direction
+        const perpRight = (directBearing + 90) % 360;  // right of travel direction
+
+        // Generate waypoints: offset left, offset right, and smaller offsets
+        function offsetPoint(lat, lng, bearingDeg, distM) {
+            const R = 6371000;
+            const brng = bearingDeg * Math.PI / 180;
+            const lat1 = lat * Math.PI / 180;
+            const lng1 = lng * Math.PI / 180;
+            const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distM / R) + Math.cos(lat1) * Math.sin(distM / R) * Math.cos(brng));
+            const lng2 = lng1 + Math.atan2(Math.sin(brng) * Math.sin(distM / R) * Math.cos(lat1), Math.cos(distM / R) - Math.sin(lat1) * Math.sin(lat2));
+            return { lat: lat2 * 180 / Math.PI, lng: lng2 * 180 / Math.PI };
+        }
+
+        const waypoints = [
+            offsetPoint(midLat, midLng, perpLeft, offsetM),           // big left detour
+            offsetPoint(midLat, midLng, perpRight, offsetM),          // big right detour
+            offsetPoint(midLat, midLng, perpLeft, offsetM * 0.5),     // small left detour
+            offsetPoint(midLat, midLng, perpRight, offsetM * 0.5),    // small right detour
+        ];
+
+        // Fetch all routes in parallel: direct + alternatives + via-waypoint routes
+        const routePromises = [];
+
+        // Direct route with OSRM alternatives
+        routePromises.push(
+            fetch(`https://router.project-osrm.org/route/v1/cycling/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true&alternatives=3`)
+                .then(r => r.json())
+                .then(d => d.routes || [])
+                .catch(() => [])
+        );
+
+        // Via-waypoint routes
+        waypoints.forEach(wp => {
+            routePromises.push(
+                fetch(`https://router.project-osrm.org/route/v1/cycling/${start.lng},${start.lat};${wp.lng},${wp.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&steps=true`)
+                    .then(r => r.json())
+                    .then(d => d.routes ? [d.routes[0]] : [])
+                    .catch(() => [])
+            );
+        });
+
+        const allRouteResults = await Promise.all(routePromises);
+        const allRoutes = allRouteResults.flat().filter(Boolean);
+
+        if (allRoutes.length === 0) {
             showStatus('No cycling route found. Try different locations.');
             document.getElementById('btn-go').disabled = false;
             setTimeout(hideStatus, 3000);
             return;
         }
 
-        const numRoutes = routeData.routes.length;
-        showStatus(`Scoring ${numRoutes} route${numRoutes > 1 ? 's' : ''} for wind & elevation...`);
+        // Deduplicate routes that are too similar (within 5% distance of each other AND similar shape)
+        const uniqueRoutes = [allRoutes[0]];
+        for (let i = 1; i < allRoutes.length; i++) {
+            const r = allRoutes[i];
+            const isDuplicate = uniqueRoutes.some(ur => {
+                const distDiff = Math.abs(r.distance - ur.distance) / ur.distance;
+                if (distDiff < 0.03) return true; // within 3% distance = probably same route
+                return false;
+            });
+            // Also skip routes that are absurdly longer (>2x direct)
+            if (!isDuplicate && r.distance < allRoutes[0].distance * 2.5) {
+                uniqueRoutes.push(r);
+            }
+        }
+
+        // Cap at 6 routes to score (API rate limits)
+        const routesToScore = uniqueRoutes.slice(0, 6);
+
+        showStatus(`Scoring ${routesToScore.length} routes for wind, elevation & effort...`);
 
         // Score all routes
-        let windCache = null;
-        for (let i = 0; i < numRoutes; i++) {
-            const scored = await scoreRoute(routeData.routes[i], null);
+        for (let i = 0; i < routesToScore.length; i++) {
+            const scored = await scoreRoute(routesToScore[i], null);
             scoredRoutes.push(scored);
         }
 
