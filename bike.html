@@ -902,31 +902,44 @@ function displayRoute(scored, isBest) {
             }));
         }
 
-        // Wind arrows - show max 3, evenly spaced along the route
+        // Wind arrows - show 3, offset away from route so they're visible
         const wpCount = windPoints.length;
         const showIndices = wpCount <= 3
             ? windPoints.map((_, i) => i)
             : [0, Math.floor(wpCount / 2), wpCount - 1];
 
-        showIndices.forEach(idx => {
+        showIndices.forEach((idx, arrIdx) => {
             const wp = windPoints[idx];
             if (!wp) return;
             const windBlowsTo = (wp.direction + 180) % 360;
             const fromLabel = ['N','NE','E','SE','S','SW','W','NW'][Math.round(wp.direction / 45) % 8];
             const speedKmh = Math.round(wp.speed);
-            const arrow = L.marker([wp.lat, wp.lon], {
+
+            // Offset the arrow position perpendicular to route to avoid overlapping
+            const routeBear = idx < coords.length - 1
+                ? calcBearing(coords[idx][1], coords[idx][0], coords[Math.min(idx+10, coords.length-1)][1], coords[Math.min(idx+10, coords.length-1)][0])
+                : 0;
+            const offsetBear = (routeBear + (arrIdx % 2 === 0 ? 90 : 270)) % 360; // alternate sides
+            const offsetDist = 0.003; // ~300m offset in degrees
+            const offLat = wp.lat + offsetDist * Math.cos(offsetBear * Math.PI / 180);
+            const offLon = wp.lon + offsetDist * Math.sin(offsetBear * Math.PI / 180);
+
+            const arrow = L.marker([offLat, offLon], {
                 icon: L.divIcon({
-                    html: `<div style="display:flex;flex-direction:column;align-items:center;opacity:0.6;">
-                        <svg width="20" height="28" viewBox="0 0 20 28" style="transform:rotate(${windBlowsTo}deg);">
-                            <path d="M10 26 L10 2 M10 2 L5 9 M10 2 L15 9" stroke="#00d4ff" stroke-width="2" fill="none" stroke-linecap="round"/>
+                    html: `<div style="display:flex;flex-direction:column;align-items:center;">
+                        <svg width="36" height="44" viewBox="0 0 24 28" style="transform:rotate(${windBlowsTo}deg);filter:drop-shadow(0 0 3px rgba(0,0,0,0.8));">
+                            <path d="M12 26 L12 2" stroke="#00d4ff" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                            <path d="M12 2 L7 10" stroke="#00d4ff" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                            <path d="M12 2 L17 10" stroke="#00d4ff" stroke-width="2.5" fill="none" stroke-linecap="round"/>
                         </svg>
-                        <div style="color:#00d4ff;font-size:9px;font-weight:600;white-space:nowrap;margin-top:1px;">${speedKmh} ${fromLabel}</div>
+                        <div style="background:rgba(0,0,0,0.7);color:#00d4ff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;margin-top:-2px;">${speedKmh} km/h ${fromLabel}</div>
                     </div>`,
-                    iconSize: [40, 40], iconAnchor: [20, 18], className: ''
-                })
+                    iconSize: [60, 55], iconAnchor: [30, 25], className: ''
+                }),
+                zIndexOffset: 1000 // ensure on top of everything
             });
             windArrows.push(arrow);
-            layer.addLayer(arrow);
+            arrow.addTo(map); // Add directly to map, not layer, so they're always on top
         });
     }
 
