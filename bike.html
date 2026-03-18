@@ -1155,15 +1155,28 @@ async function planRoute() {
             }
         }
 
-        // Cap at 6 routes to score (API rate limits)
-        const routesToScore = uniqueRoutes.slice(0, 6);
+        // Cap at 4 routes to score (elevation API: 1 req/sec rate limit)
+        const routesToScore = uniqueRoutes.slice(0, 4);
 
         showStatus(`Scoring ${routesToScore.length} routes for wind, elevation & effort...`);
 
-        // Score all routes
+        // Score routes sequentially with delay to respect elevation API rate limit
         for (let i = 0; i < routesToScore.length; i++) {
-            const scored = await scoreRoute(routesToScore[i], null);
-            scoredRoutes.push(scored);
+            if (i > 0) await new Promise(r => setTimeout(r, 1200)); // 1.2s between requests
+            showStatus(`Scoring route ${i + 1} of ${routesToScore.length}...`);
+            try {
+                const scored = await scoreRoute(routesToScore[i], null);
+                scoredRoutes.push(scored);
+            } catch(e) {
+                console.warn(`Route ${i+1} scoring failed, skipping`, e);
+            }
+        }
+
+        if (scoredRoutes.length === 0) {
+            showStatus('Could not score routes. Please try again.');
+            document.getElementById('btn-go').disabled = false;
+            setTimeout(hideStatus, 3000);
+            return;
         }
 
         // Sort by total effort (lowest = easiest ride)
