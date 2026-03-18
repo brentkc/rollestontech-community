@@ -865,6 +865,18 @@ function displayRoute(scored, isBest) {
     const weight = isBest ? 6 : 4;
     const opacity = isBest ? 0.9 : 0.35;
 
+    if (isBest) {
+        // Tyre track effect: dark outer border + dashed centre line
+        layer.addLayer(L.polyline(leafletCoords, {
+            color: '#000', weight: 10, opacity: 0.5, lineCap: 'round', lineJoin: 'round'
+        }));
+        layer.addLayer(L.polyline(leafletCoords, {
+            color: '#1a1a1a', weight: 7, opacity: 0.6, lineCap: 'round', lineJoin: 'round',
+            dashArray: '1 8'
+        }));
+    }
+
+    // Wind-coloured route on top
     segments.forEach(s => {
         layer.addLayer(L.polyline(s.coords, { color: isBest ? s.color : '#888', weight, opacity }));
     });
