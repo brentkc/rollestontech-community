@@ -439,7 +439,7 @@
 </div>
 
 <div class="radar-fullwidth">
-    <iframe src="https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=8&overlay=rain&product=ecmwf&level=surface&lat=-43.591&lon=172.379&message=true&marker=true&calendar=now&pressure=true&detail=true&menu=true" loading="lazy"></iframe>
+    <iframe src="https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=11&overlay=wind&product=ecmwf&level=surface&lat=-43.591&lon=172.379&message=true&marker=true&calendar=now&pressure=true&detail=true&menu=true" loading="lazy"></iframe>
 </div>
 </main>
 
@@ -699,7 +699,7 @@ function updateUI() {
     h1.appendChild(document.createTextNode(' Weather'));
     const windyFrame = document.querySelector('.radar-fullwidth iframe');
     if (windyFrame) {
-        windyFrame.src = `https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=8&overlay=rain&product=ecmwf&level=surface&lat=${userLat}&lon=${userLon}&message=true&marker=true&calendar=now&pressure=true&detail=true&menu=true`;
+        windyFrame.src = `https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=11&overlay=wind&product=ecmwf&level=surface&lat=${userLat}&lon=${userLon}&message=true&marker=true&calendar=now&pressure=true&detail=true&menu=true`;
     }
 }
 
